@@ -87,6 +87,16 @@ const router = createRouter({
           name: 'Settings',
           component: () => import('../views/settings/SettingsView.vue'),
         },
+        {
+          path: 'onboarding',
+          name: 'Onboarding',
+          component: () => import('../views/onboarding/OnboardingWizardView.vue'),
+        },
+        {
+          path: 'config',
+          name: 'Config',
+          component: () => import('../views/config/ConfigManagementView.vue'),
+        },
       ],
     },
   ],
