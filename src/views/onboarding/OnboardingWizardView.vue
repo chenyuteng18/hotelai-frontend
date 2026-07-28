@@ -67,6 +67,101 @@
         </div>
       </div>
       <div v-if="currentStep === 3" class="step-form">
+        <h2>定价偏好</h2>
+        <p class="step-desc">帮助我们了解您的定价风格，生成个性化策略</p>
+
+        <div class="form-group">
+          <label class="form-label">1. 风险偏好</label>
+          <div class="card-select-group">
+            <div
+              v-for="opt in riskOptions"
+              :key="opt.value"
+              class="card-select"
+              :class="{ 'card-select--active': strategyProfile.riskPreference === opt.value }"
+              @click="strategyProfile.riskPreference = opt.value"
+            >
+              <span class="card-select__icon">{{ opt.icon }}</span>
+              <span class="card-select__title">{{ opt.label }}</span>
+              <span class="card-select__desc">{{ opt.desc }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="targetOccupancy">2. 目标入住率</label>
+          <div class="slider-group">
+            <input
+              id="targetOccupancy"
+              v-model.number="strategyProfile.targetOccupancy"
+              type="range"
+              min="50"
+              max="95"
+              step="5"
+              class="slider"
+            />
+            <span class="slider-value">{{ strategyProfile.targetOccupancy }}%</span>
+          </div>
+          <p class="form-hint">建议范围：商务酒店 75-85%，度假酒店 60-75%</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">3. 竞对关注度</label>
+          <div class="card-select-group">
+            <div
+              v-for="opt in competitorOptions"
+              :key="opt.value"
+              class="card-select"
+              :class="{ 'card-select--active': strategyProfile.competitorAttention === opt.value }"
+              @click="strategyProfile.competitorAttention = opt.value"
+            >
+              <span class="card-select__icon">{{ opt.icon }}</span>
+              <span class="card-select__title">{{ opt.label }}</span>
+              <span class="card-select__desc">{{ opt.desc }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">4. 单次调价接受幅度</label>
+          <div class="radio-group">
+            <label v-for="opt in priceChangeOptions" :key="opt" class="radio-label">
+              <input type="radio" :value="opt" v-model="strategyProfile.maxPriceChange" />
+              {{ opt }}%
+            </label>
+          </div>
+        </div>
+
+        <div v-if="showStrategySummary" class="strategy-summary-card">
+          <h3>策略摘要</h3>
+          <div class="strategy-summary__grid">
+            <div class="strategy-summary__item">
+              <span class="strategy-summary__label">算法模式</span>
+              <span class="strategy-summary__value">{{ strategySummary.algorithmMode }}</span>
+            </div>
+            <div class="strategy-summary__item">
+              <span class="strategy-summary__label">收益权重</span>
+              <span class="strategy-summary__value">{{ strategySummary.revenueWeight }}%</span>
+            </div>
+            <div class="strategy-summary__item">
+              <span class="strategy-summary__label">入住率权重</span>
+              <span class="strategy-summary__value">{{ strategySummary.occupancyWeight }}%</span>
+            </div>
+            <div class="strategy-summary__item">
+              <span class="strategy-summary__label">调幅上限</span>
+              <span class="strategy-summary__value">{{ strategySummary.maxChange }}%</span>
+            </div>
+            <div class="strategy-summary__item">
+              <span class="strategy-summary__label">竞对跟随度</span>
+              <span class="strategy-summary__value">{{ strategySummary.competitorFollow }}%</span>
+            </div>
+            <div class="strategy-summary__item">
+              <span class="strategy-summary__label">目标入住率</span>
+              <span class="strategy-summary__value">{{ strategyProfile.targetOccupancy }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-if="currentStep === 4" class="step-form">
         <h2>确认信息</h2>
         <div class="summary-grid">
           <div class="summary-item">
@@ -93,6 +188,18 @@
             <span class="summary-label">管理员</span>
             <span class="summary-value">{{ form.adminName || '—' }}</span>
           </div>
+          <div class="summary-item">
+            <span class="summary-label">风险偏好</span>
+            <span class="summary-value">{{ riskLabel }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">目标入住率</span>
+            <span class="summary-value">{{ strategyProfile.targetOccupancy }}%</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">调价幅度</span>
+            <span class="summary-value">{{ strategyProfile.maxPriceChange }}%</span>
+          </div>
         </div>
       </div>
       <div class="wizard-actions">
@@ -103,21 +210,27 @@
         </button>
       </div>
     </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="handleSubmit" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { http } from '../../services/api'
+import AppToast from '../../components/common/AppToast.vue'
 
 const router = useRouter()
 const currentStep = ref(0)
 const submitting = ref(false)
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
 const steps = [
   { title: '基本信息' },
   { title: '房型配置' },
   { title: '管理员账户' },
+  { title: '定价偏好' },
   { title: '确认提交' },
 ]
 
@@ -130,6 +243,68 @@ const form = reactive({
   adminName: '',
   adminEmail: '',
   adminPhone: '',
+})
+
+const strategyProfile = reactive({
+  riskPreference: 'balanced',
+  targetOccupancy: 80,
+  competitorAttention: 'reference',
+  maxPriceChange: 10,
+})
+
+const riskOptions = [
+  { value: 'conservative', icon: '🛡️', label: '保守稳健', desc: '优先保障入住率，价格波动小' },
+  { value: 'balanced', icon: '⚖️', label: '均衡', desc: '入住率与收益兼顾' },
+  { value: 'aggressive', icon: '🚀', label: '积极进取', desc: '追求收益最大化，接受波动' },
+]
+
+const competitorOptions = [
+  { value: 'follow', icon: '👁️', label: '完全跟随', desc: '紧跟竞对价格变化' },
+  { value: 'reference', icon: '📊', label: '参考为主', desc: '参考竞对但保持独立判断' },
+  { value: 'independent', icon: '🎯', label: '我行我素', desc: '以自身数据为主，少量参考' },
+]
+
+const priceChangeOptions = [5, 10, 15, 20]
+
+const showStrategySummary = computed(() => {
+  return currentStep.value === 3 && strategyProfile.riskPreference !== ''
+})
+
+const riskLabel = computed(() => {
+  const map: Record<string, string> = { conservative: '保守稳健', balanced: '均衡', aggressive: '积极进取' }
+  return map[strategyProfile.riskPreference] || '—'
+})
+
+const strategySummary = computed(() => {
+  const risk = strategyProfile.riskPreference
+  const comp = strategyProfile.competitorAttention
+
+  let algorithmMode = '均衡模式'
+  let revenueWeight = 50
+  let occupancyWeight = 50
+  let competitorFollow = 50
+
+  if (risk === 'conservative') {
+    algorithmMode = '稳健模式'
+    occupancyWeight = 70
+    revenueWeight = 30
+  } else if (risk === 'aggressive') {
+    algorithmMode = '收益优先'
+    revenueWeight = 70
+    occupancyWeight = 30
+  }
+
+  if (comp === 'follow') competitorFollow = 90
+  else if (comp === 'reference') competitorFollow = 50
+  else if (comp === 'independent') competitorFollow = 15
+
+  return {
+    algorithmMode,
+    revenueWeight,
+    occupancyWeight,
+    maxChange: strategyProfile.maxPriceChange,
+    competitorFollow,
+  }
 })
 
 const hotelTypeLabel = computed(() => {
@@ -145,11 +320,29 @@ function removeRoomType(index: number) {
   form.roomTypes.splice(index, 1)
 }
 
+watch(() => currentStep.value, (newStep) => {
+  if (newStep === 3 && !strategyProfile.riskPreference) {
+    strategyProfile.riskPreference = 'balanced'
+  }
+})
+
 async function handleSubmit() {
   submitting.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await http.put('/v1/config/strategy-profile', {
+      riskPreference: strategyProfile.riskPreference,
+      targetOccupancy: strategyProfile.targetOccupancy,
+      competitorAttention: strategyProfile.competitorAttention,
+      maxPriceChange: strategyProfile.maxPriceChange,
+      algorithmMode: strategySummary.value.algorithmMode,
+      revenueWeight: strategySummary.value.revenueWeight,
+      occupancyWeight: strategySummary.value.occupancyWeight,
+      competitorFollow: strategySummary.value.competitorFollow,
+    })
     router.push('/dashboard')
+  } catch {
+    toastMessage.value = '策略配置保存失败，请稍后重试'
+    toastVisible.value = true
   } finally {
     submitting.value = false
   }
@@ -259,5 +452,178 @@ async function handleSubmit() {
   display: flex;
   gap: var(--spacing-md);
   margin-top: var(--spacing-xl);
+}
+
+.step-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.card-select-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+}
+
+.card-select {
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.card-select:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.card-select--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.card-select__icon {
+  font-size: 28px;
+}
+
+.card-select__title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.card-select__desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  line-height: 1.4;
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-border);
+  border-radius: 3px;
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider-value {
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  color: var(--color-primary);
+  min-width: 50px;
+  text-align: right;
+}
+
+.form-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--spacing-xs);
+}
+
+.radio-group {
+  display: flex;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+
+.strategy-summary-card {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4f8 100%);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+.strategy-summary-card h3 {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+  color: var(--color-primary);
+}
+
+.strategy-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+}
+
+.strategy-summary__item {
+  text-align: center;
+}
+
+.strategy-summary__label {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.strategy-summary__value {
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .card-select-group {
+    grid-template-columns: 1fr;
+  }
+
+  .strategy-summary__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

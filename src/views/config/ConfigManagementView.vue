@@ -541,11 +541,172 @@
       </div>
       <p v-if="saved" class="save-success" role="status">配置已保存</p>
     </div>
+
+    <!-- 策略画像 -->
+    <div v-if="activeTab === 'strategy_profile'" class="config-content config-content--wide">
+      <div class="sub-header">
+        <div>
+          <h2>策略画像</h2>
+          <p class="sub-header__desc">可视化当前定价策略参数，支持手动微调</p>
+        </div>
+      </div>
+
+      <div v-if="strategyLoading" class="loading-state">加载策略配置中...</div>
+
+      <template v-else>
+        <!-- 雷达图可视化 -->
+        <div class="card config-section">
+          <h3>策略参数雷达图</h3>
+          <div class="radar-chart">
+            <svg viewBox="0 0 300 300" class="radar-svg">
+              <!-- Background circles -->
+              <circle cx="150" cy="150" r="100" fill="none" stroke="var(--color-border)" stroke-width="1" opacity="0.3" />
+              <circle cx="150" cy="150" r="75" fill="none" stroke="var(--color-border)" stroke-width="1" opacity="0.3" />
+              <circle cx="150" cy="150" r="50" fill="none" stroke="var(--color-border)" stroke-width="1" opacity="0.3" />
+              <circle cx="150" cy="150" r="25" fill="none" stroke="var(--color-border)" stroke-width="1" opacity="0.3" />
+              <!-- Axis lines -->
+              <line v-for="(axis, i) in radarAxes" :key="'line-' + i"
+                x1="150" y1="150"
+                :x2="150 + 100 * Math.cos(axis.angle)"
+                :y2="150 + 100 * Math.sin(axis.angle)"
+                stroke="var(--color-border)" stroke-width="1" opacity="0.3" />
+              <!-- Data polygon -->
+              <polygon
+                :points="radarPoints"
+                fill="var(--color-primary)" fill-opacity="0.2"
+                stroke="var(--color-primary)" stroke-width="2" />
+              <!-- Data points -->
+              <circle v-for="(point, i) in radarDataPoints" :key="'point-' + i"
+                :cx="point.x" :cy="point.y" r="4"
+                fill="var(--color-primary)" />
+              <!-- Labels -->
+              <text v-for="(axis, i) in radarAxes" :key="'label-' + i"
+                :x="150 + 115 * Math.cos(axis.angle)"
+                :y="150 + 115 * Math.sin(axis.angle)"
+                text-anchor="middle" dominant-baseline="middle"
+                class="radar-label">{{ axis.label }}</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 参数调整 -->
+        <div class="card config-section">
+          <h3>参数调整</h3>
+
+          <div class="param-row">
+            <label class="param-label">风险偏好</label>
+            <div class="param-control">
+              <select v-model="editedProfile.riskPreference" class="form-input">
+                <option value="conservative">保守稳健</option>
+                <option value="balanced">均衡</option>
+                <option value="aggressive">积极进取</option>
+              </select>
+            </div>
+            <div v-if="editedProfile.riskPreference !== currentProfile.riskPreference" class="param-change">
+              {{ riskLabel(currentProfile.riskPreference) }} → {{ riskLabel(editedProfile.riskPreference) }}
+            </div>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">目标入住率</label>
+            <div class="param-control">
+              <input type="range" v-model.number="editedProfile.targetOccupancy" min="50" max="95" step="5" class="slider" />
+              <span class="slider-value">{{ editedProfile.targetOccupancy }}%</span>
+            </div>
+            <div v-if="editedProfile.targetOccupancy !== currentProfile.targetOccupancy" class="param-change">
+              {{ currentProfile.targetOccupancy }}% → {{ editedProfile.targetOccupancy }}%
+            </div>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">竞对关注度</label>
+            <div class="param-control">
+              <select v-model="editedProfile.competitorAttention" class="form-input">
+                <option value="follow">完全跟随</option>
+                <option value="reference">参考为主</option>
+                <option value="independent">我行我素</option>
+              </select>
+            </div>
+            <div v-if="editedProfile.competitorAttention !== currentProfile.competitorAttention" class="param-change">
+              {{ compLabel(currentProfile.competitorAttention) }} → {{ compLabel(editedProfile.competitorAttention) }}
+            </div>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">单次调价幅度上限</label>
+            <div class="param-control">
+              <select v-model.number="editedProfile.maxPriceChange" class="form-input">
+                <option :value="5">5%</option>
+                <option :value="10">10%</option>
+                <option :value="15">15%</option>
+                <option :value="20">20%</option>
+              </select>
+            </div>
+            <div v-if="editedProfile.maxPriceChange !== currentProfile.maxPriceChange" class="param-change">
+              {{ currentProfile.maxPriceChange }}% → {{ editedProfile.maxPriceChange }}%
+            </div>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">收益权重</label>
+            <div class="param-control">
+              <input type="range" v-model.number="editedProfile.revenueWeight" min="0" max="100" step="5" class="slider" />
+              <span class="slider-value">{{ editedProfile.revenueWeight }}%</span>
+            </div>
+            <div v-if="editedProfile.revenueWeight !== currentProfile.revenueWeight" class="param-change">
+              {{ currentProfile.revenueWeight }}% → {{ editedProfile.revenueWeight }}%
+            </div>
+          </div>
+
+          <div class="param-row">
+            <label class="param-label">竞对跟随度</label>
+            <div class="param-control">
+              <input type="range" v-model.number="editedProfile.competitorFollow" min="0" max="100" step="5" class="slider" />
+              <span class="slider-value">{{ editedProfile.competitorFollow }}%</span>
+            </div>
+            <div v-if="editedProfile.competitorFollow !== currentProfile.competitorFollow" class="param-change">
+              {{ currentProfile.competitorFollow }}% → {{ editedProfile.competitorFollow }}%
+            </div>
+          </div>
+        </div>
+
+        <!-- 变更对比 -->
+        <div v-if="hasChanges" class="card config-section change-summary">
+          <h3>变更对比</h3>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>参数</th>
+                <th>当前值</th>
+                <th>新值</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="change in changeList" :key="change.key">
+                <td>{{ change.label }}</td>
+                <td class="change-old">{{ change.oldValue }}</td>
+                <td class="change-new">{{ change.newValue }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="config-actions">
+          <button class="btn btn-primary" :disabled="saving || !hasChanges" @click="saveStrategyProfile">
+            {{ saving ? '保存中...' : '保存策略' }}
+          </button>
+          <button class="btn" :disabled="!hasChanges" @click="resetEdits">重置</button>
+        </div>
+        <p v-if="saved" class="save-success" role="status">策略已保存</p>
+        <p class="strategy-note">修改后立即对下次定价生效</p>
+      </template>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, watch, onMounted } from 'vue'
+import { http } from '../../services/api'
 
 const activeTab = ref('pricing')
 const saving = ref(false)
@@ -560,6 +721,7 @@ const tabs = [
   { id: 'collection', label: '采集计划' },
   { id: 'pms_import', label: 'PMS 导入' },
   { id: 'notify_approval', label: '通知审批' },
+  { id: 'strategy_profile', label: '策略画像' },
 ]
 
 const config = reactive({
@@ -841,6 +1003,145 @@ function freqLabel(f: string) {
   const map: Record<string, string> = { hourly: '每小时', daily: '每天', weekly: '每周' }
   return map[f] || f
 }
+
+// --- 策略画像 ---
+interface StrategyProfile {
+  riskPreference: string
+  targetOccupancy: number
+  competitorAttention: string
+  maxPriceChange: number
+  revenueWeight: number
+  occupancyWeight: number
+  competitorFollow: number
+}
+
+const strategyLoading = ref(false)
+const currentProfile = reactive<StrategyProfile>({
+  riskPreference: 'balanced',
+  targetOccupancy: 80,
+  competitorAttention: 'reference',
+  maxPriceChange: 10,
+  revenueWeight: 50,
+  occupancyWeight: 50,
+  competitorFollow: 50,
+})
+
+const editedProfile = reactive<StrategyProfile>({ ...currentProfile })
+
+function riskLabel(v: string) {
+  const map: Record<string, string> = { conservative: '保守稳健', balanced: '均衡', aggressive: '积极进取' }
+  return map[v] || v
+}
+
+function compLabel(v: string) {
+  const map: Record<string, string> = { follow: '完全跟随', reference: '参考为主', independent: '我行我素' }
+  return map[v] || v
+}
+
+const radarAxes = [
+  { label: '收益权重', angle: -Math.PI / 2 },
+  { label: '入住率权重', angle: -Math.PI / 2 + (2 * Math.PI / 5) },
+  { label: '竞对跟随', angle: -Math.PI / 2 + (4 * Math.PI / 5) },
+  { label: '调幅容忍', angle: -Math.PI / 2 + (6 * Math.PI / 5) },
+  { label: '目标入住', angle: -Math.PI / 2 + (8 * Math.PI / 5) },
+]
+
+const radarDataPoints = computed(() => {
+  const values = [
+    editedProfile.revenueWeight / 100,
+    editedProfile.occupancyWeight / 100,
+    editedProfile.competitorFollow / 100,
+    editedProfile.maxPriceChange / 20,
+    editedProfile.targetOccupancy / 100,
+  ]
+  return radarAxes.map((axis, i) => ({
+    x: 150 + 100 * values[i] * Math.cos(axis.angle),
+    y: 150 + 100 * values[i] * Math.sin(axis.angle),
+  }))
+})
+
+const radarPoints = computed(() => radarDataPoints.value.map((p) => `${p.x},${p.y}`).join(' '))
+
+const hasChanges = computed(() => {
+  return (Object.keys(currentProfile) as (keyof StrategyProfile)[]).some(
+    (k) => editedProfile[k] !== currentProfile[k]
+  )
+})
+
+const changeList = computed(() => {
+  const items: { key: string; label: string; oldValue: string; newValue: string }[] = []
+  if (editedProfile.riskPreference !== currentProfile.riskPreference) {
+    items.push({ key: 'risk', label: '风险偏好', oldValue: riskLabel(currentProfile.riskPreference), newValue: riskLabel(editedProfile.riskPreference) })
+  }
+  if (editedProfile.targetOccupancy !== currentProfile.targetOccupancy) {
+    items.push({ key: 'occupancy', label: '目标入住率', oldValue: currentProfile.targetOccupancy + '%', newValue: editedProfile.targetOccupancy + '%' })
+  }
+  if (editedProfile.competitorAttention !== currentProfile.competitorAttention) {
+    items.push({ key: 'comp', label: '竞对关注度', oldValue: compLabel(currentProfile.competitorAttention), newValue: compLabel(editedProfile.competitorAttention) })
+  }
+  if (editedProfile.maxPriceChange !== currentProfile.maxPriceChange) {
+    items.push({ key: 'change', label: '调价幅度上限', oldValue: currentProfile.maxPriceChange + '%', newValue: editedProfile.maxPriceChange + '%' })
+  }
+  if (editedProfile.revenueWeight !== currentProfile.revenueWeight) {
+    items.push({ key: 'revWeight', label: '收益权重', oldValue: currentProfile.revenueWeight + '%', newValue: editedProfile.revenueWeight + '%' })
+  }
+  if (editedProfile.competitorFollow !== currentProfile.competitorFollow) {
+    items.push({ key: 'compFollow', label: '竞对跟随度', oldValue: currentProfile.competitorFollow + '%', newValue: editedProfile.competitorFollow + '%' })
+  }
+  return items
+})
+
+function resetEdits() {
+  Object.assign(editedProfile, { ...currentProfile })
+}
+
+async function fetchStrategyProfile() {
+  strategyLoading.value = true
+  try {
+    const { data } = await http.get('/v1/config/strategy-profile')
+    const d = data.data || data
+    Object.assign(currentProfile, {
+      riskPreference: d.riskPreference || 'balanced',
+      targetOccupancy: d.targetOccupancy || 80,
+      competitorAttention: d.competitorAttention || 'reference',
+      maxPriceChange: d.maxPriceChange || 10,
+      revenueWeight: d.revenueWeight || 50,
+      occupancyWeight: d.occupancyWeight || 50,
+      competitorFollow: d.competitorFollow || 50,
+    })
+    Object.assign(editedProfile, { ...currentProfile })
+  } catch {
+    // API 不可用时使用默认值
+  } finally {
+    strategyLoading.value = false
+  }
+}
+
+async function saveStrategyProfile() {
+  saving.value = true
+  saved.value = false
+  try {
+    await http.put('/v1/config/strategy-profile', { ...editedProfile })
+    Object.assign(currentProfile, { ...editedProfile })
+    saved.value = true
+  } catch {
+    // 保存失败
+  } finally {
+    saving.value = false
+  }
+}
+
+watch(() => activeTab.value, (val) => {
+  if (val === 'strategy_profile') {
+    fetchStrategyProfile()
+  }
+})
+
+onMounted(() => {
+  if (activeTab.value === 'strategy_profile') {
+    fetchStrategyProfile()
+  }
+})
 </script>
 
 <style scoped>
@@ -1194,6 +1495,141 @@ function freqLabel(f: string) {
   .data-table th,
   .data-table td {
     padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}
+
+/* 策略画像 */
+.radar-chart {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-md) 0;
+}
+
+.radar-svg {
+  width: 300px;
+  height: 300px;
+  max-width: 100%;
+}
+
+.radar-label {
+  font-size: 11px;
+  fill: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.param-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.param-row:last-child {
+  border-bottom: none;
+}
+
+.param-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.param-control {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.param-control .slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-border);
+  border-radius: 3px;
+  outline: none;
+}
+
+.param-control .slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.param-control .slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: none;
+}
+
+.param-control .slider-value {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  min-width: 45px;
+  text-align: right;
+}
+
+.param-change {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+  font-weight: 500;
+  white-space: nowrap;
+  background: #fffbeb;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #fde68a;
+}
+
+.change-summary {
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.change-old {
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+}
+
+.change-new {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.strategy-note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary);
+}
+
+.loading-state {
+  text-align: center;
+  padding: var(--spacing-xxl);
+  color: var(--color-text-tertiary);
+}
+
+@media (max-width: 768px) {
+  .param-row {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .param-change {
+    justify-self: start;
   }
 }
 </style>
