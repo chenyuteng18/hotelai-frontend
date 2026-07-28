@@ -54,6 +54,7 @@ const authStore = useAuthStore()
 const collapsed = ref(false)
 
 const navItems = [
+  { path: '/calendar', label: '定价日历', icon: '📅' },
   { path: '/dashboard', label: '总览', icon: '📊' },
   { path: '/kanban', label: '收益看板', icon: '📋' },
   { path: '/prediction/occupancy', label: '入住率预测', icon: '📈' },

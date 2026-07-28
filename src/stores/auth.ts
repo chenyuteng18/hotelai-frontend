@@ -14,6 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = data.data.token
     user.value = data.data.user
     localStorage.setItem('token', data.data.token)
+    localStorage.setItem('userRole', data.data.user.role || 'user')
   }
 
   async function changePassword(oldPassword: string, newPassword: string) {
@@ -24,6 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = ''
     user.value = null
     localStorage.removeItem('token')
+    localStorage.removeItem('userRole')
   }
 
   return { token, user, isAuthenticated, login, changePassword, logout }

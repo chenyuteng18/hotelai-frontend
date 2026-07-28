@@ -20,7 +20,15 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/dashboard',
+          redirect: () => {
+            const role = localStorage.getItem('userRole')
+            return role === 'admin' ? '/dashboard' : '/calendar'
+          },
+        },
+        {
+          path: 'calendar',
+          name: 'Calendar',
+          component: () => import('../views/calendar/CalendarView.vue'),
         },
         {
           path: 'dashboard',
