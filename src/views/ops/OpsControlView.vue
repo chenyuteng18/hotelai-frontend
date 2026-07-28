@@ -7,7 +7,8 @@
 
     <div class="card switches-section">
       <h2>三级安全开关</h2>
-      <div class="switches-grid">
+      <div v-if="loadingSwitches" class="loading-indicator">加载开关配置中...</div>
+      <div v-else class="switches-grid">
         <div class="switch-card" :class="switchCardClass(switches.kill_switch)">
           <div class="switch-card__header">
             <span class="switch-card__level">Level 1</span>
@@ -21,7 +22,8 @@
               :class="{ 'toggle--on': switches.kill_switch }"
               :aria-pressed="switches.kill_switch"
               :aria-label="'Kill Switch ' + (switches.kill_switch ? '已启用' : '已禁用')"
-              @click="toggleSwitch('kill_switch')"
+              :disabled="saving"
+              @click="requestToggle('kill_switch')"
             >
               <span class="toggle__knob"></span>
             </button>
@@ -42,8 +44,8 @@
               :class="{ 'toggle--on': switches.allow_live_execution }"
               :aria-pressed="switches.allow_live_execution"
               :aria-label="'Live Execution ' + (switches.allow_live_execution ? '已启用' : '已禁用')"
-              :disabled="switches.kill_switch"
-              @click="toggleSwitch('allow_live_execution')"
+              :disabled="switches.kill_switch || saving"
+              @click="requestToggle('allow_live_execution')"
             >
               <span class="toggle__knob"></span>
             </button>
@@ -64,8 +66,8 @@
               :class="{ 'toggle--on': switches.dry_run_baseline }"
               :aria-pressed="switches.dry_run_baseline"
               :aria-label="'Dry Run ' + (switches.dry_run_baseline ? '已启用' : '已禁用')"
-              :disabled="switches.kill_switch"
-              @click="toggleSwitch('dry_run_baseline')"
+              :disabled="switches.kill_switch || saving"
+              @click="requestToggle('dry_run_baseline')"
             >
               <span class="toggle__knob"></span>
             </button>
@@ -74,7 +76,6 @@
         </div>
       </div>
       <div v-if="saving" class="saving-indicator">保存中...</div>
-      <p v-if="saveSuccess" class="save-success" role="status">配置已保存</p>
     </div>
 
     <div class="card records-section">
@@ -124,12 +125,26 @@
         <button class="btn btn-sm" :disabled="currentPage === totalPages" @click="currentPage++">下一页</button>
       </div>
     </div>
+    <AppToast :show="toastVisible" :message="toastMessage" :type="toastType" :retryable="toastRetryable" @update:show="toastVisible = $event" @retry="toastRetryAction" />
+    <ConfirmDialog
+      :show="confirmShow"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :type="confirmDialogType"
+      confirm-text="确认执行"
+      cancel-text="取消"
+      @update:show="confirmShow = $event"
+      @confirm="handleConfirm"
+      @cancel="confirmShow = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
+import AppToast from '../../components/common/AppToast.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://118.190.207.62:8080/api',
@@ -160,11 +175,23 @@ const switches = reactive({
 })
 
 const saving = ref(false)
-const saveSuccess = ref(false)
+const loadingSwitches = ref(false)
 const records = ref<ExecutionRecord[]>([])
 const loadingRecords = ref(false)
 const currentPage = ref(1)
 const pageSize = 50
+
+const toastVisible = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'error' | 'success' | 'warning'>('error')
+const toastRetryable = ref(false)
+let toastRetryAction: (() => void) | null = null
+
+const confirmShow = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+const confirmDialogType = ref<'default' | 'danger'>('danger')
+let confirmAction: (() => void) | null = null
 
 const totalPages = computed(() => Math.ceil(records.value.length / pageSize))
 const paginatedRecords = computed(() => {
@@ -176,30 +203,72 @@ function switchCardClass(enabled: boolean) {
   return enabled ? 'switch-card--active' : ''
 }
 
-async function toggleSwitch(key: keyof typeof switches) {
+function showToast(message: string, type: 'error' | 'success' | 'warning' = 'error', retryable = false, retryFn: (() => void) | null = null) {
+  toastMessage.value = message
+  toastType.value = type
+  toastRetryable.value = retryable
+  toastRetryAction = retryFn
+  toastVisible.value = true
+}
+
+function requestConfirm(title: string, message: string, action: () => void, type: 'default' | 'danger' = 'danger') {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmAction = action
+  confirmDialogType.value = type
+  confirmShow.value = true
+}
+
+function handleConfirm() {
+  confirmShow.value = false
+  if (confirmAction) {
+    confirmAction()
+    confirmAction = null
+  }
+}
+
+function requestToggle(key: keyof typeof switches) {
+  const labels: Record<string, string> = {
+    kill_switch: 'Kill Switch',
+    allow_live_execution: 'Allow Live Execution',
+    dry_run_baseline: 'Dry Run Baseline',
+  }
+  const willEnable = !switches[key]
+  const action = willEnable ? '启用' : '禁用'
+  requestConfirm(
+    `确认${action}${labels[key]}`,
+    '确认执行此操作？执行后将立即生效。',
+    () => executeToggle(key),
+    key === 'kill_switch' && willEnable ? 'danger' : 'default'
+  )
+}
+
+async function executeToggle(key: keyof typeof switches) {
   switches[key] = !switches[key]
   if (key === 'kill_switch' && switches[key]) {
     switches.allow_live_execution = false
   }
   saving.value = true
-  saveSuccess.value = false
   try {
     await http.put('/v1/ops/switches', { ...switches })
-    saveSuccess.value = true
-    setTimeout(() => { saveSuccess.value = false }, 2000)
+    showToast('开关配置已保存', 'success')
   } catch {
     switches[key] = !switches[key]
+    showToast('保存开关配置失败，请稍后重试', 'error', true, () => executeToggle(key))
   } finally {
     saving.value = false
   }
 }
 
 async function fetchSwitches() {
+  loadingSwitches.value = true
   try {
     const { data } = await http.get('/v1/ops/switches')
     Object.assign(switches, data.data)
   } catch {
-    // use defaults
+    showToast('加载开关配置失败', 'error', true, fetchSwitches)
+  } finally {
+    loadingSwitches.value = false
   }
 }
 
@@ -210,6 +279,7 @@ async function fetchRecords() {
     records.value = data.data || []
   } catch {
     records.value = []
+    showToast('加载执行记录失败，请稍后重试', 'error', true, fetchRecords)
   } finally {
     loadingRecords.value = false
   }
@@ -334,14 +404,16 @@ onMounted(() => {
   font-weight: 500;
 }
 
+.loading-indicator {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
 .saving-indicator {
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
-}
-
-.save-success {
-  color: var(--color-success);
-  font-size: var(--font-size-sm);
 }
 
 .records-header {

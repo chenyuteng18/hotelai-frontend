@@ -40,7 +40,11 @@
         </div>
       </div>
     </div>
-    <p v-if="!roomTypes.length" class="empty-state">暂无房型数据</p>
+    <div v-if="!roomTypes.length" class="empty-state">
+      <p>暂无房型数据</p>
+      <p class="empty-hint">请添加房型或检查网络连接后重试</p>
+    </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchRoomTypes" />
   </div>
 </template>
 
@@ -48,21 +52,30 @@
 import { ref, onMounted } from 'vue'
 import { roomApi } from '../../services/api'
 import type { RoomType } from '../../types'
+import AppToast from '../../components/common/AppToast.vue'
 
 const roomTypes = ref<RoomType[]>([])
+
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
 function availabilityPercent(rt: RoomType) {
   if (!rt.totalRooms) return 0
   return Math.round((rt.availableRooms / rt.totalRooms) * 100)
 }
 
-onMounted(async () => {
+async function fetchRoomTypes() {
   try {
     const { data } = await roomApi.getTypes()
     roomTypes.value = data.data
   } catch {
-    // 占位
+    toastMessage.value = '获取房型列表失败，请稍后重试'
+    toastVisible.value = true
   }
+}
+
+onMounted(() => {
+  fetchRoomTypes()
 })
 </script>
 
@@ -136,5 +149,10 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-text-tertiary);
   padding: var(--spacing-xxl);
+}
+
+.empty-hint {
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-xs);
 }
 </style>

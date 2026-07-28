@@ -38,16 +38,24 @@
         </div>
       </div>
     </div>
-    <p v-if="!predictions.length" class="empty-state">暂无预测数据</p>
+    <div v-if="!predictions.length" class="empty-state">
+      <p>暂无预测数据</p>
+      <p class="empty-state__hint">当 AI 完成入住率预测后将在此显示</p>
+    </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchData" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { predictionApi } from '../../services/api'
+import { formatCurrency } from '../../utils/format'
+import AppToast from '../../components/common/AppToast.vue'
 import type { Prediction } from '../../types'
 
 const predictions = ref<Prediction[]>([])
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
 function confidenceClass(c: number) {
   if (c >= 0.8) return 'status-tag--success'
@@ -61,14 +69,17 @@ function boundClass(val: number, lower: number, upper: number) {
   return 'progress-bar__fill--warning'
 }
 
-onMounted(async () => {
+async function fetchData() {
   try {
     const { data } = await predictionApi.getOccupancy()
     predictions.value = data.data
   } catch {
-    // 占位
+    toastMessage.value = '获取入住率预测失败，请稍后重试'
+    toastVisible.value = true
   }
-})
+}
+
+onMounted(fetchData)
 </script>
 
 <style scoped>
@@ -144,5 +155,10 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-text-tertiary);
   padding: var(--spacing-xxl);
+}
+
+.empty-state__hint {
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-xs);
 }
 </style>

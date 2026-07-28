@@ -13,8 +13,8 @@
           </span>
         </div>
         <div class="prediction-card__value">
-          <span class="value-main">¥{{ item.predictedValue }}</span>
-          <span class="value-range">建议区间 ¥{{ item.lowerBound }} – ¥{{ item.upperBound }}</span>
+          <span class="value-main">{{ formatCurrency(item.predictedValue) }}</span>
+          <span class="value-range">建议区间 {{ formatCurrency(item.lowerBound) }} – {{ formatCurrency(item.upperBound) }}</span>
         </div>
         <div class="prediction-card__bounds">
           <div class="progress-bar" role="img" aria-label="定价安全边界">
@@ -37,16 +37,24 @@
         </div>
       </div>
     </div>
-    <p v-if="!predictions.length" class="empty-state">暂无预测数据</p>
+    <div v-if="!predictions.length" class="empty-state">
+      <p>暂无预测数据</p>
+      <p class="empty-state__hint">当 AI 完成房价预测后将在此显示</p>
+    </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchData" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { predictionApi } from '../../services/api'
+import { formatCurrency } from '../../utils/format'
+import AppToast from '../../components/common/AppToast.vue'
 import type { Prediction } from '../../types'
 
 const predictions = ref<Prediction[]>([])
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
 function confidenceClass(c: number) {
   if (c >= 0.8) return 'status-tag--success'
@@ -59,14 +67,17 @@ function barWidth(item: Prediction) {
   return Math.round((item.predictedValue / max) * 100)
 }
 
-onMounted(async () => {
+async function fetchData() {
   try {
     const { data } = await predictionApi.getPrice()
     predictions.value = data.data
   } catch {
-    // 占位
+    toastMessage.value = '获取房价预测失败，请稍后重试'
+    toastVisible.value = true
   }
-})
+}
+
+onMounted(fetchData)
 </script>
 
 <style scoped>
@@ -142,5 +153,10 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-text-tertiary);
   padding: var(--spacing-xxl);
+}
+
+.empty-state__hint {
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-xs);
 }
 </style>

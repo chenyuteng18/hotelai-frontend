@@ -17,7 +17,7 @@
           </div>
           <div class="detail-item">
             <span class="detail-item__label">涉及金额</span>
-            <span class="detail-item__value">¥{{ approval.amount.toLocaleString() }}</span>
+            <span class="detail-item__value">{{ formatCurrency(approval.amount) }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-item__label">申请时间</span>
@@ -33,10 +33,10 @@
           <p>{{ approval.reason }}</p>
         </div>
         <div v-if="approval.status === 'pending'" class="detail-actions">
-          <button class="btn btn-primary" :disabled="loading" @click="handleApprove">
+          <button class="btn btn-primary" :disabled="loading" @click="requestConfirm('确认通过', '确认通过此审批？通过后不可撤销。', handleApprove)">
             通过
           </button>
-          <button class="btn btn-danger" :disabled="loading" @click="showReject = true">
+          <button class="btn btn-danger" :disabled="loading" @click="requestConfirm('确认拒绝', '确认拒绝此审批？请填写拒绝原因。', () => showReject = true)">
             拒绝
           </button>
         </div>
@@ -50,6 +50,8 @@
       </div>
     </div>
     <p v-else class="empty-state">加载中...</p>
+    <ConfirmDialog :show="showConfirm" :title="confirmTitle" :message="confirmMessage" @update:show="showConfirm = $event" @confirm="handleConfirm" />
+    <AppToast v-if="toastMessage" :message="toastMessage" :type="toastType" @close="toastMessage = ''" />
   </div>
 </template>
 
@@ -57,6 +59,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { approvalApi } from '../../services/api'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
+import AppToast from '../../components/common/AppToast.vue'
+import { formatCurrency } from '../../utils/format'
 import type { Approval } from '../../types'
 
 const route = useRoute()
@@ -64,6 +69,24 @@ const approval = ref<Approval | null>(null)
 const loading = ref(false)
 const showReject = ref(false)
 const rejectReason = ref('')
+const showConfirm = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+const confirmAction = ref<(() => void) | null>(null)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error'>('success')
+
+function requestConfirm(title: string, message: string, action: () => void) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmAction.value = action
+  showConfirm.value = true
+}
+
+function handleConfirm() {
+  showConfirm.value = false
+  confirmAction.value?.()
+}
 
 function statusClass(s: string) {
   if (s === 'approved') return 'status-tag--success'
@@ -89,6 +112,11 @@ async function handleApprove() {
   try {
     await approvalApi.approve(approval.value.id)
     approval.value.status = 'approved'
+    toastType.value = 'success'
+    toastMessage.value = '审批已通过'
+  } catch {
+    toastType.value = 'error'
+    toastMessage.value = '操作失败，请稍后重试'
   } finally {
     loading.value = false
   }
@@ -101,6 +129,11 @@ async function handleReject() {
     await approvalApi.reject(approval.value.id, rejectReason.value)
     approval.value.status = 'rejected'
     showReject.value = false
+    toastType.value = 'success'
+    toastMessage.value = '审批已拒绝'
+  } catch {
+    toastType.value = 'error'
+    toastMessage.value = '操作失败，请稍后重试'
   } finally {
     loading.value = false
   }

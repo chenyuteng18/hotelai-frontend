@@ -24,7 +24,7 @@
         class="calendar-cell"
         :class="{ 'calendar-cell--empty': !cell.day }"
       >
-        <div v-if="cell.day" class="day-card" :class="dayCardClass(cell)">
+        <div v-if="cell.day" class="day-card" :class="[dayCardClass(cell), { 'day-card--expanded': expandedDay === cell.day }]" @click="toggleDayDetail(cell)">
           <div class="day-card__header">
             <span class="day-card__date">{{ cell.day }}日</span>
             <span class="day-card__weekday">{{ cell.weekday }}</span>
@@ -48,7 +48,7 @@
             <div class="metric-row">
               <span class="metric-label">ADR</span>
               <span class="metric-value">
-                ¥{{ cell.adr ?? '--' }}
+                {{ formatCurrency(cell.adr) }}
                 <span v-if="cell.adrChange != null" :class="changeClass(cell.adrChange)">
                   ({{ cell.adrChange >= 0 ? '+' : '' }}{{ cell.adrChange }}%)
                 </span>
@@ -57,7 +57,7 @@
             <div class="metric-row">
               <span class="metric-label">RevPAR</span>
               <span class="metric-value">
-                ¥{{ cell.revpar ?? '--' }}
+                {{ formatCurrency(cell.revpar) }}
                 <span v-if="cell.revparChange != null" :class="changeClass(cell.revparChange)">
                   ({{ cell.revparChange >= 0 ? '+' : '' }}{{ cell.revparChange }}%)
                 </span>
@@ -67,11 +67,11 @@
           <div class="day-card__revenue">
             <div class="revenue-row">
               <span class="revenue-label">Act.Rev</span>
-              <span class="revenue-value">¥{{ formatMoney(cell.actualRevenue) }}</span>
+              <span class="revenue-value">{{ formatCurrency(cell.actualRevenue) }}</span>
             </div>
             <div class="revenue-row">
               <span class="revenue-label">Fct.Rev</span>
-              <span class="revenue-value revenue-value--fct">¥{{ formatMoney(cell.forecastRevenue) }}</span>
+              <span class="revenue-value revenue-value--fct">{{ formatCurrency(cell.forecastRevenue) }}</span>
             </div>
             <div class="progress-bar" role="img" :aria-label="'收入完成度 ' + completionPercent(cell) + '%'">
               <div
@@ -81,10 +81,48 @@
               ></div>
             </div>
           </div>
+          <div v-if="expandedDay === cell.day" class="day-detail" @click.stop>
+            <div class="day-detail__section">
+              <h4>竞对价格</h4>
+              <div v-if="dayDetailLoading" class="day-detail__loading">加载中...</div>
+              <div v-else-if="dayDetail?.competitors?.length" class="competitor-list">
+                <div v-for="comp in dayDetail.competitors" :key="comp.name" class="competitor-item">
+                  <span class="competitor-item__name">{{ comp.name }}</span>
+                  <span class="competitor-item__price">{{ formatCurrency(comp.price) }}</span>
+                </div>
+              </div>
+              <p v-else class="day-detail__empty">暂无竞对数据</p>
+            </div>
+            <div class="day-detail__section">
+              <h4>AI 建议价</h4>
+              <div v-if="dayDetail?.suggestedPrice" class="suggested-price">
+                <span class="suggested-price__value">{{ formatCurrency(dayDetail.suggestedPrice) }}</span>
+                <span v-if="dayDetail.confidence" class="suggested-price__confidence">置信度 {{ dayDetail.confidence }}%</span>
+              </div>
+              <p v-else class="day-detail__empty">暂无建议价</p>
+            </div>
+            <div class="day-detail__section">
+              <h4>执行记录</h4>
+              <div v-if="dayDetail?.executions?.length" class="execution-list">
+                <div v-for="exec in dayDetail.executions" :key="exec.time" class="execution-item">
+                  <span class="execution-item__time">{{ exec.time }}</span>
+                  <span class="execution-item__action">{{ exec.action }}</span>
+                  <span class="execution-item__result" :class="'execution-item__result--' + exec.status">{{ exec.statusLabel }}</span>
+                </div>
+              </div>
+              <p v-else class="day-detail__empty">暂无执行记录</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
     <p v-if="loading" class="loading-state">加载中...</p>
+    <div v-if="!loading && !calendarCells.some(c => c.day)" class="empty-state">
+      <p>暂无日历数据</p>
+      <p class="empty-state__hint">请切换月份或稍后刷新</p>
+      <button class="btn btn-primary" style="margin-top: var(--spacing-md)" @click="fetchCalendarData">刷新数据</button>
+    </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchCalendarData" />
   </div>
 </template>
 
@@ -92,6 +130,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import DataFreshness from '../../components/common/DataFreshness.vue'
+import AppToast from '../../components/common/AppToast.vue'
+import { formatCurrency } from '../../utils/format'
 
 interface CalendarDay {
   date: string
@@ -107,6 +147,13 @@ interface CalendarDay {
   revparChange: number | null
   actualRevenue: number | null
   forecastRevenue: number | null
+}
+
+interface DayDetail {
+  competitors: { name: string; price: number }[]
+  suggestedPrice: number | null
+  confidence: number | null
+  executions: { time: string; action: string; status: string; statusLabel: string }[]
 }
 
 const http = axios.create({
@@ -134,6 +181,11 @@ const currentMonth = ref(7)
 const calendarData = ref<CalendarDay[]>([])
 const loading = ref(false)
 const dataLastUpdated = ref('')
+const expandedDay = ref<number | null>(null)
+const dayDetail = ref<DayDetail | null>(null)
+const dayDetailLoading = ref(false)
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -200,9 +252,40 @@ function nextMonth() {
   }
 }
 
-function formatMoney(val: number | null | undefined) {
-  if (val == null) return '--'
-  return val.toLocaleString()
+function toggleDayDetail(cell: CalendarCell) {
+  if (!cell.day) return
+  if (expandedDay.value === cell.day) {
+    expandedDay.value = null
+    dayDetail.value = null
+    return
+  }
+  expandedDay.value = cell.day
+  fetchDayDetail(cell.day)
+}
+
+async function fetchDayDetail(day: number) {
+  dayDetailLoading.value = true
+  dayDetail.value = null
+  const dateStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  try {
+    const { data } = await http.get(`/v1/calendar/day-detail`, { params: { date: dateStr } })
+    const d = data.data || data
+    dayDetail.value = {
+      competitors: d.competitors || [],
+      suggestedPrice: d.suggestedPrice ?? null,
+      confidence: d.confidence ?? null,
+      executions: (d.executions || []).map((e: any) => ({
+        time: e.time,
+        action: e.action,
+        status: e.status,
+        statusLabel: e.status === 'success' ? '成功' : e.status === 'failed' ? '失败' : '待执行',
+      })),
+    }
+  } catch {
+    dayDetail.value = { competitors: [], suggestedPrice: null, confidence: null, executions: [] }
+  } finally {
+    dayDetailLoading.value = false
+  }
 }
 
 function completionPercent(cell: CalendarCell) {
@@ -256,6 +339,8 @@ async function fetchCalendarData() {
     dataLastUpdated.value = new Date().toLocaleString()
   } catch {
     calendarData.value = []
+    toastMessage.value = '日历数据加载失败，请检查网络后重试'
+    toastVisible.value = true
   } finally {
     loading.value = false
   }
@@ -341,6 +426,7 @@ onMounted(fetchCalendarData)
   gap: 4px;
   transition: box-shadow 0.2s;
   font-size: var(--font-size-xs);
+  cursor: pointer;
 }
 
 .day-card:hover {
@@ -456,6 +542,128 @@ onMounted(fetchCalendarData)
   text-align: center;
   color: var(--color-text-tertiary);
   padding: var(--spacing-xl);
+}
+
+.day-card--expanded {
+  grid-column: span 2;
+  grid-row: span 2;
+  z-index: 10;
+  position: relative;
+  cursor: default;
+}
+
+.day-detail {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.day-detail__section h4 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.day-detail__loading {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.day-detail__empty {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-quaternary, #d9d9d9);
+}
+
+.competitor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.competitor-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+}
+
+.competitor-item__name {
+  color: var(--color-text-secondary);
+}
+
+.competitor-item__price {
+  font-weight: 600;
+}
+
+.suggested-price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+}
+
+.suggested-price__value {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.suggested-price__confidence {
+  font-size: 10px;
+  color: var(--color-success);
+}
+
+.execution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.execution-item {
+  display: flex;
+  gap: var(--spacing-xs);
+  font-size: 10px;
+  align-items: center;
+}
+
+.execution-item__time {
+  color: var(--color-text-tertiary);
+  min-width: 40px;
+}
+
+.execution-item__action {
+  flex: 1;
+}
+
+.execution-item__result {
+  font-weight: 500;
+}
+
+.execution-item__result--success {
+  color: var(--color-success);
+}
+
+.execution-item__result--failed {
+  color: var(--color-error);
+}
+
+.execution-item__result--pending {
+  color: var(--color-warning);
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xxl);
+  color: var(--color-text-tertiary);
+}
+
+.empty-state__hint {
+  font-size: var(--font-size-xs);
+  margin-top: var(--spacing-xs);
 }
 
 @media (max-width: 1024px) {

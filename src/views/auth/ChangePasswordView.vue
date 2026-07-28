@@ -52,18 +52,23 @@
         </div>
       </form>
     </div>
+    <AppToast :show="toastVisible" :message="toastMessage" :type="toastType" @update:show="toastVisible = $event" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
+import AppToast from '../../components/common/AppToast.vue'
 
 const authStore = useAuthStore()
 const form = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
+const toastVisible = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error'>('success')
 
 async function handleSubmit() {
   error.value = ''
@@ -83,8 +88,14 @@ async function handleSubmit() {
     form.oldPassword = ''
     form.newPassword = ''
     form.confirmPassword = ''
+    toastType.value = 'success'
+    toastMessage.value = '密码修改成功'
+    toastVisible.value = true
   } catch {
     error.value = '修改失败，请检查当前密码是否正确'
+    toastType.value = 'error'
+    toastMessage.value = '修改失败，请检查当前密码是否正确'
+    toastVisible.value = true
   } finally {
     loading.value = false
   }

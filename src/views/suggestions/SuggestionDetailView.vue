@@ -15,7 +15,7 @@
         <div class="detail-metrics">
           <div class="metric-box">
             <span class="metric-box__label">预期收益影响</span>
-            <span class="metric-box__value">+¥{{ suggestion.expectedImpact.toLocaleString() }}</span>
+            <span class="metric-box__value">+{{ formatCurrency(suggestion.expectedImpact) }}</span>
           </div>
           <div class="metric-box">
             <span class="metric-box__label">安全边界</span>
@@ -37,6 +37,7 @@
       </div>
     </div>
     <p v-else class="empty-state">加载中...</p>
+    <AppToast :show="toastVisible" :message="toastMessage" :type="toastType" @update:show="toastVisible = $event" />
   </div>
 </template>
 
@@ -45,9 +46,14 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { suggestionApi } from '../../services/api'
 import type { Suggestion } from '../../types'
+import AppToast from '../../components/common/AppToast.vue'
+import { formatCurrency } from '../../utils/format'
 
 const route = useRoute()
 const suggestion = ref<Suggestion | null>(null)
+const toastVisible = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error'>('success')
 
 function priorityClass(p: string) {
   if (p === 'high') return 'status-tag--error'
@@ -79,7 +85,9 @@ onMounted(async () => {
     const { data } = await suggestionApi.getDetail(id)
     suggestion.value = data.data
   } catch {
-    // 占位
+    toastType.value = 'error'
+    toastMessage.value = '加载建议详情失败'
+    toastVisible.value = true
   }
 })
 </script>

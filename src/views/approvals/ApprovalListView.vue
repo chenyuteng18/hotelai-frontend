@@ -60,21 +60,24 @@
           </p>
         </div>
         <div class="approval-card__right">
-          <span class="approval-card__amount">¥{{ item.amount.toLocaleString() }}</span>
+          <span class="approval-card__amount">{{ formatCurrency(item.amount) }}</span>
         </div>
       </router-link>
     </div>
 
     <div v-if="!filteredApprovals.length" class="empty-state">
       <p>暂无审批记录</p>
-      <p class="empty-hint">当有价格调整或促销活动需要审批时，将显示在此处</p>
+      <p class="empty-hint">当有审批记录时将在此显示</p>
     </div>
+    <AppToast v-if="toastMessage" :message="toastMessage" :type="toastType" @close="toastMessage = ''" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { approvalApi, competitorApi } from '../../services/api'
+import { formatCurrency } from '../../utils/format'
+import AppToast from '../../components/common/AppToast.vue'
 import type { Approval } from '../../types'
 
 const approvals = ref<Approval[]>([])
@@ -84,6 +87,8 @@ const competitorCount = ref(0)
 const competitorAvgPrice = ref<number | null>(null)
 const lastUpdated = ref('')
 const staleHours = ref(0)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error'>('error')
 
 const filters = [
   { label: '全部', value: 'all' },
@@ -148,7 +153,8 @@ onMounted(async () => {
     approvals.value = data.data.items
     lastUpdated.value = new Date().toLocaleString()
   } catch {
-    // silent
+    toastType.value = 'error'
+    toastMessage.value = '获取审批列表失败，请稍后重试'
   }
   fetchCompetitorStats()
 

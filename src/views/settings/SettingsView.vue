@@ -44,22 +44,29 @@
         </div>
       </div>
     </div>
+    <AppToast :show="toastVisible" :message="toastMessage" :type="toastType" @update:show="toastVisible = $event" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { authApi } from '../../services/api'
+import AppToast from '../../components/common/AppToast.vue'
 
 const profile = ref({ username: '', role: '', hotelName: '' })
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://118.190.207.62:8080/api'
+const toastVisible = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error'>('success')
 
 onMounted(async () => {
   try {
     const { data } = await authApi.getProfile()
     profile.value = data.data
   } catch {
-    // 占位
+    toastType.value = 'error'
+    toastMessage.value = '加载账户信息失败'
+    toastVisible.value = true
   }
 })
 </script>

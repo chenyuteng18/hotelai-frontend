@@ -35,7 +35,7 @@
         <div class="competitor-card__metrics">
           <div class="metric">
             <span class="metric__label">均价</span>
-            <span class="metric__value">¥{{ item.avgPrice?.toLocaleString() }}</span>
+            <span class="metric__value">{{ formatCurrency(item.avgPrice) }}</span>
           </div>
           <div class="metric">
             <span class="metric__label">入住率</span>
@@ -48,13 +48,13 @@
             :key="i"
             class="mini-bar"
             :style="{ height: normalizePrice(point.value) + '%' }"
-            :title="point.date + ': ¥' + point.value"
+            :title="point.date + ': ' + formatCurrency(point.value)"
           ></div>
         </div>
       </div>
       <div v-if="!competitors.length" class="empty-state">
         <p>暂无竞品数据</p>
-        <p class="empty-hint">配置竞品酒店后将显示在此处</p>
+        <p class="empty-hint">请在系统中配置竞品酒店后，数据将显示在此处</p>
       </div>
     </div>
 
@@ -90,10 +90,10 @@
                 :class="cellColorClass(getCellData(roomType, day.date))"
               >
                 <div v-if="getCellData(roomType, day.date)" class="cell-content">
-                  <span class="cell-price">¥{{ getCellData(roomType, day.date)?.memberPrice?.toLocaleString() }}</span>
+                  <span class="cell-price">{{ formatCurrency(getCellData(roomType, day.date)?.memberPrice) }}</span>
                   <span class="cell-rank">第{{ getCellData(roomType, day.date)?.rank }}/{{ getCellData(roomType, day.date)?.total }}</span>
                   <span v-if="getCellData(roomType, day.date)?.priceDiff" class="cell-diff" :class="diffClass(getCellData(roomType, day.date)?.priceDiff ?? 0)">
-                    {{ getCellData(roomType, day.date)?.priceDiff! >= 0 ? '+' : '' }}¥{{ getCellData(roomType, day.date)?.priceDiff?.toLocaleString() }}
+                    {{ getCellData(roomType, day.date)?.priceDiff! >= 0 ? '+' : '' }}{{ formatCurrency(getCellData(roomType, day.date)?.priceDiff) }}
                   </span>
                 </div>
                 <span v-else class="cell-empty">--</span>
@@ -108,6 +108,7 @@
         <span class="legend-item"><span class="legend-dot legend-dot--orange"></span>价格劣势</span>
       </div>
     </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchCompetitors" />
   </div>
 </template>
 
@@ -115,6 +116,8 @@
 import { ref, onMounted } from 'vue'
 import { competitorApi } from '../../services/api'
 import type { Competitor } from '../../types'
+import { formatCurrency } from '../../utils/format'
+import AppToast from '../../components/common/AppToast.vue'
 
 interface MatrixCell {
   roomType: string
@@ -129,6 +132,8 @@ const competitors = ref<Competitor[]>([])
 const viewMode = ref<'cards' | 'matrix'>('cards')
 const selectedBreakfast = ref('single')
 const matrixData = ref<MatrixCell[]>([])
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
 const matrixDays = ref<Array<{ date: string; label: string; weekday: string }>>([])
 const matrixRoomTypes = ref<string[]>([])
@@ -192,18 +197,24 @@ async function fetchMatrixData() {
       }
     }
     matrixData.value = cells
-  } catch {
-    // silent
+  } catch (error) {
+    toastMessage.value = '获取竞品矩阵数据失败，请稍后重试'
+    toastVisible.value = true
   }
 }
 
-onMounted(async () => {
+async function fetchCompetitors() {
   try {
     const { data } = await competitorApi.getList()
     competitors.value = data.data
-  } catch {
-    // silent
+  } catch (error) {
+    toastMessage.value = '获取竞品数据失败，请稍后重试'
+    toastVisible.value = true
   }
+}
+
+onMounted(() => {
+  fetchCompetitors()
   fetchMatrixData()
 })
 </script>

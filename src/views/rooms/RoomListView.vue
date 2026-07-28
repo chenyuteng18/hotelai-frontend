@@ -11,13 +11,13 @@
         class="btn filter-btn"
         :class="{ 'btn-primary': activeStatus === f.value }"
         :aria-pressed="activeStatus === f.value"
-        @click="activeStatus = f.value"
+        @click="activeStatus = f.value; page = 1"
       >
         {{ f.label }}
       </button>
     </div>
     <div class="room-grid">
-      <div v-for="room in filteredRooms" :key="room.id" class="card room-card">
+      <div v-for="room in paginatedRooms" :key="room.id" class="card room-card">
         <div class="room-card__header">
           <span class="room-card__number">{{ room.number }}</span>
           <span class="status-tag" :class="roomStatusClass(room.status)">{{ roomStatusLabel(room.status) }}</span>
@@ -28,16 +28,36 @@
         <div class="room-card__pricing">
           <div class="price-item">
             <span class="price-label">当前价</span>
-            <span class="price-value">¥{{ room.currentPrice }}</span>
+            <span class="price-value">{{ formatCurrency(room.currentPrice) }}</span>
           </div>
           <div class="price-item">
             <span class="price-label">建议价</span>
-            <span class="price-value price-value--suggested">¥{{ room.suggestedPrice }}</span>
+            <span class="price-value price-value--suggested">{{ formatCurrency(room.suggestedPrice) }}</span>
           </div>
         </div>
       </div>
     </div>
-    <p v-if="!filteredRooms.length" class="empty-state">暂无房间数据</p>
+    <div v-if="!filteredRooms.length" class="empty-state">
+      <p>暂无房间数据</p>
+      <p class="empty-hint">请添加房间或检查筛选条件</p>
+    </div>
+    <div v-if="filteredRooms.length > pageSize" class="pagination">
+      <button class="btn btn-sm" :disabled="page === 1" @click="page--">上一页</button>
+      <span class="pagination__info">{{ page }} / {{ totalPages }}</span>
+      <button class="btn btn-sm" :disabled="page === totalPages" @click="page++">下一页</button>
+    </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchRooms" />
+    <ConfirmDialog
+      :show="confirmShow"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      type="danger"
+      confirm-text="确认"
+      cancel-text="取消"
+      @update:show="confirmShow = $event"
+      @confirm="handleConfirm"
+      @cancel="confirmShow = false"
+    />
   </div>
 </template>
 
@@ -45,9 +65,23 @@
 import { ref, computed, onMounted } from 'vue'
 import { roomApi } from '../../services/api'
 import type { Room } from '../../types'
+import AppToast from '../../components/common/AppToast.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
+import { formatCurrency } from '../../utils/format'
 
 const rooms = ref<Room[]>([])
 const activeStatus = ref('all')
+
+const page = ref(1)
+const pageSize = 20
+
+const toastVisible = ref(false)
+const toastMessage = ref('')
+
+const confirmShow = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+let confirmAction: (() => void) | null = null
 
 const statusFilters = [
   { label: '全部', value: 'all' },
@@ -60,6 +94,13 @@ const statusFilters = [
 const filteredRooms = computed(() => {
   if (activeStatus.value === 'all') return rooms.value
   return rooms.value.filter((r) => r.status === activeStatus.value)
+})
+
+const totalPages = computed(() => Math.ceil(filteredRooms.value.length / pageSize))
+
+const paginatedRooms = computed(() => {
+  const start = (page.value - 1) * pageSize
+  return filteredRooms.value.slice(start, start + pageSize)
 })
 
 function roomStatusClass(s: string) {
@@ -76,13 +117,33 @@ function roomStatusLabel(s: string) {
   return '维护中'
 }
 
-onMounted(async () => {
+function requestConfirm(title: string, message: string, action: () => void) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmAction = action
+  confirmShow.value = true
+}
+
+function handleConfirm() {
+  confirmShow.value = false
+  if (confirmAction) {
+    confirmAction()
+    confirmAction = null
+  }
+}
+
+async function fetchRooms() {
   try {
     const { data } = await roomApi.getList()
     rooms.value = data.data.items
   } catch {
-    // 占位
+    toastMessage.value = '获取房间列表失败，请稍后重试'
+    toastVisible.value = true
   }
+}
+
+onMounted(() => {
+  fetchRooms()
 })
 </script>
 
@@ -147,5 +208,28 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-text-tertiary);
   padding: var(--spacing-xxl);
+}
+
+.empty-hint {
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.pagination__info {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: var(--font-size-xs);
 }
 </style>

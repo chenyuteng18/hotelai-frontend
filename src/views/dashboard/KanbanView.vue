@@ -4,7 +4,11 @@
       <h1>收益看板</h1>
       <p>多维度收益指标看板</p>
     </div>
-    <div class="kanban-board">
+    <div v-if="!columns.length" class="empty-state">
+      <p>暂无看板数据</p>
+      <p class="empty-hint">请检查数据服务是否正常连接，或点击刷新重试</p>
+    </div>
+    <div v-else class="kanban-board">
       <div v-for="col in columns" :key="col.id" class="kanban-column">
         <h2 class="kanban-column__title">{{ col.title }}</h2>
         <div class="kanban-column__cards">
@@ -19,6 +23,7 @@
         </div>
       </div>
     </div>
+    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchColumns" />
   </div>
 </template>
 
@@ -26,14 +31,19 @@
 import { ref, onMounted } from 'vue'
 import { kanbanApi } from '../../services/api'
 import type { KanbanColumn } from '../../types'
+import AppToast from '../../components/common/AppToast.vue'
 
 const columns = ref<KanbanColumn[]>([])
+const toastVisible = ref(false)
+const toastMessage = ref('')
 
-onMounted(async () => {
+async function fetchColumns() {
   try {
     const { data } = await kanbanApi.getColumns()
     columns.value = data.data
-  } catch {
+  } catch (error) {
+    toastMessage.value = '获取看板数据失败，请稍后重试'
+    toastVisible.value = true
     columns.value = [
       {
         id: 'revenue',
@@ -61,7 +71,9 @@ onMounted(async () => {
       },
     ]
   }
-})
+}
+
+onMounted(fetchColumns)
 </script>
 
 <style scoped>
@@ -118,5 +130,16 @@ onMounted(async () => {
 
 .kanban-card__change.stable {
   color: var(--color-text-tertiary);
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--color-text-tertiary);
+}
+
+.empty-hint {
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-xs);
 }
 </style>
