@@ -15,6 +15,7 @@
         </button>
       </div>
     </div>
+    <DataFreshness :lastUpdated="dataLastUpdated" :staleThreshold="2" @refresh="fetchCalendarData" />
     <div class="calendar-grid">
       <div v-for="day in weekDays" :key="day" class="calendar-weekday">{{ day }}</div>
       <div
@@ -90,6 +91,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
+import DataFreshness from '../../components/common/DataFreshness.vue'
 
 interface CalendarDay {
   date: string
@@ -131,6 +133,7 @@ const currentYear = ref(2026)
 const currentMonth = ref(7)
 const calendarData = ref<CalendarDay[]>([])
 const loading = ref(false)
+const dataLastUpdated = ref('')
 
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -250,6 +253,7 @@ async function fetchCalendarData() {
     const monthStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}`
     const { data } = await http.get('/v1/calendar/monthly', { params: { month: monthStr } })
     calendarData.value = data.data || data
+    dataLastUpdated.value = new Date().toLocaleString()
   } catch {
     calendarData.value = []
   } finally {

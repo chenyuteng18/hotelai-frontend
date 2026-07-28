@@ -4,6 +4,7 @@
       <h1>运营总览</h1>
       <p>酒店核心经营指标实时概览</p>
     </div>
+    <DataFreshness :lastUpdated="dataLastUpdated" :staleThreshold="1" @refresh="fetchStats" />
     <div class="stats-grid">
       <div v-for="stat in statsCards" :key="stat.label" class="card stat-card">
         <span class="stat-card__label">{{ stat.label }}</span>
@@ -34,6 +35,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { dashboardApi } from '../../services/api'
 import type { TrendPoint } from '../../types'
+import DataFreshness from '../../components/common/DataFreshness.vue'
 
 const occupancyRate = ref(0)
 const avgDailyRate = ref(0)
@@ -41,6 +43,7 @@ const revPar = ref(0)
 const totalRevenue = ref(0)
 const occupancyTrend = ref<TrendPoint[]>([])
 const revenueTrend = ref<TrendPoint[]>([])
+const dataLastUpdated = ref('')
 
 const statsCards = computed(() => [
   { label: '入住率', value: occupancyRate.value + '%', trend: 3.2 },
@@ -54,7 +57,7 @@ function normalizeRevenue(val: number) {
   return Math.round((val / max) * 100)
 }
 
-onMounted(async () => {
+async function fetchStats() {
   try {
     const { data } = await dashboardApi.getStats()
     const stats = data.data
@@ -64,10 +67,13 @@ onMounted(async () => {
     totalRevenue.value = stats.totalRevenue
     occupancyTrend.value = stats.occupancyTrend
     revenueTrend.value = stats.revenueTrend
+    dataLastUpdated.value = new Date().toLocaleString()
   } catch {
     // API 不可用时使用占位数据
   }
-})
+}
+
+onMounted(fetchStats)
 </script>
 
 <style scoped>
