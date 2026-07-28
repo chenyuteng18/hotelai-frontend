@@ -15,7 +15,7 @@ import type {
   PaginatedResponse,
 } from '../types'
 
-const http = axios.create({
+export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://118.190.207.62:8080/api',
   timeout: 15000,
 })

@@ -28,6 +28,31 @@
         >
           ☰
         </button>
+        <div class="header__center">
+          <div class="autopilot-switch" :class="{ 'autopilot-switch--active': autopilotEnabled }">
+            <button
+              class="autopilot-switch__toggle"
+              role="switch"
+              :aria-checked="autopilotEnabled"
+              aria-label="Autopilot 全局开关"
+              @click="toggleAutopilot"
+            >
+              <span class="autopilot-switch__knob"></span>
+              <span class="autopilot-switch__label">Autopilot</span>
+            </button>
+          </div>
+          <div class="integration-status" aria-label="集成状态">
+            <span
+              v-for="ch in integrationChannels"
+              :key="ch.name"
+              class="integration-dot"
+              :class="'integration-dot--' + ch.status"
+              :title="ch.name + '：' + statusText(ch.status)"
+            >
+              <span class="integration-dot__label">{{ ch.name }}</span>
+            </span>
+          </div>
+        </div>
         <div class="header__right">
           <router-link to="/change-password" class="header__action" aria-label="修改密码">
             修改密码
@@ -45,13 +70,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { http } from '../../services/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const collapsed = ref(false)
+const autopilotEnabled = ref(false)
+
+interface IntegrationChannel {
+  name: string
+  status: 'online' | 'offline'
+}
+
+const integrationChannels = ref<IntegrationChannel[]>([
+  { name: '携程', status: 'offline' },
+  { name: 'PMS', status: 'offline' },
+  { name: '美团', status: 'offline' },
+])
+
+function toggleAutopilot() {
+  autopilotEnabled.value = !autopilotEnabled.value
+  http.put('/v1/autopilot/toggle', { enabled: autopilotEnabled.value }).catch(() => {})
+}
+
+function statusText(s: string) {
+  if (s === 'online') return '已连接'
+  return '未连接'
+}
+
+async function fetchIntegrationStatus() {
+  try {
+    const { data } = await http.get('/v1/integrations/status')
+    const list = data.data || data
+    if (Array.isArray(list)) {
+      integrationChannels.value = list.map((item: any) => ({
+        name: item.name,
+        status: item.connected ? 'online' : 'offline',
+      }))
+    }
+  } catch {
+    // API 不可用时保持默认状态
+  }
+}
+
+onMounted(() => {
+  fetchIntegrationStatus()
+})
 
 const navItems = [
   { path: '/calendar', label: '定价日历', icon: '📅' },
@@ -232,6 +299,97 @@ function handleLogout() {
   margin: 0 auto;
 }
 
+.header__center {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.autopilot-switch__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 4px 12px 4px 4px;
+  border-radius: 20px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.autopilot-switch--active .autopilot-switch__toggle {
+  background: #e6f7ee;
+  border-color: #52c41a;
+}
+
+.autopilot-switch__knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+
+.autopilot-switch--active .autopilot-switch__knob {
+  background: #52c41a;
+  box-shadow: 0 0 6px rgba(82, 196, 26, 0.4);
+}
+
+.autopilot-switch__label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.autopilot-switch--active .autopilot-switch__label {
+  color: #52c41a;
+}
+
+.integration-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.integration-dot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  position: relative;
+  padding-left: 12px;
+}
+
+.integration-dot::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-quaternary, #d9d9d9);
+  transition: background 0.3s;
+}
+
+.integration-dot--online::before {
+  background: #52c41a;
+  box-shadow: 0 0 4px rgba(82, 196, 26, 0.5);
+}
+
+.integration-dot--offline::before {
+  background: #d9d9d9;
+}
+
+.integration-dot__label {
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
@@ -244,6 +402,10 @@ function handleLogout() {
 
   .layout__main {
     margin-left: 0 !important;
+  }
+
+  .header__center {
+    display: none;
   }
 }
 </style>
