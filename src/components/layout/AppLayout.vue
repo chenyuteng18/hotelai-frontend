@@ -68,6 +68,7 @@ const navItems = [
   { path: '/onboarding', label: '开户向导', icon: '📝' },
   { path: '/config', label: '配置管理', icon: '🔧' },
   { path: '/pms-import', label: 'PMS导入', icon: '📥' },
+  { path: '/ops', label: '执行控制', icon: '🎛️' },
   { path: '/settings', label: '系统设置', icon: '⚙️' },
 ]
 

@@ -110,6 +110,11 @@ const router = createRouter({
           name: 'PmsImport',
           component: () => import('../views/pms/PmsImportView.vue'),
         },
+        {
+          path: 'ops',
+          name: 'Ops',
+          component: () => import('../views/ops/OpsControlView.vue'),
+        },
       ],
     },
   ],
