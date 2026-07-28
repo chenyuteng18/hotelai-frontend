@@ -67,6 +67,7 @@ const navItems = [
   { path: '/competitors', label: '竞品分析', icon: '🔍' },
   { path: '/onboarding', label: '开户向导', icon: '📝' },
   { path: '/config', label: '配置管理', icon: '🔧' },
+  { path: '/pms-import', label: 'PMS导入', icon: '📥' },
   { path: '/settings', label: '系统设置', icon: '⚙️' },
 ]
 

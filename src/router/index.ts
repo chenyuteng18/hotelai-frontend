@@ -105,6 +105,11 @@ const router = createRouter({
           name: 'Config',
           component: () => import('../views/config/ConfigManagementView.vue'),
         },
+        {
+          path: 'pms-import',
+          name: 'PmsImport',
+          component: () => import('../views/pms/PmsImportView.vue'),
+        },
       ],
     },
   ],
