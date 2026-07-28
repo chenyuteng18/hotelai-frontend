@@ -2,7 +2,7 @@
   <div class="config-page">
     <div class="page-header">
       <h1>配置管理</h1>
-      <p>系统参数与业务规则配置</p>
+      <p>系统参数、集成配置与业务规则</p>
     </div>
     <div class="config-tabs" role="tablist" aria-label="配置分类">
       <button
@@ -17,8 +17,10 @@
         {{ tab.label }}
       </button>
     </div>
-    <div class="card config-content">
-      <div v-if="activeTab === 'pricing'" class="config-section">
+
+    <!-- 定价策略 -->
+    <div v-if="activeTab === 'pricing'" class="card config-content">
+      <div class="config-section">
         <h2>定价策略</h2>
         <div class="form-group">
           <label class="form-label" for="priceFloor">最低价格限制（元）</label>
@@ -39,7 +41,18 @@
           </label>
         </div>
       </div>
-      <div v-if="activeTab === 'notification'" class="config-section">
+      <div class="config-actions">
+        <button class="btn btn-primary" :disabled="saving" @click="handleSave">
+          {{ saving ? '保存中...' : '保存配置' }}
+        </button>
+        <button class="btn" @click="handleReset">重置默认</button>
+      </div>
+      <p v-if="saved" class="save-success" role="status">配置已保存</p>
+    </div>
+
+    <!-- 通知设置 -->
+    <div v-if="activeTab === 'notification'" class="card config-content">
+      <div class="config-section">
         <h2>通知设置</h2>
         <div class="form-group">
           <label class="form-label">
@@ -62,7 +75,17 @@
           <input id="occupancyThreshold" v-model.number="config.occupancyThreshold" type="number" class="form-input" />
         </div>
       </div>
-      <div v-if="activeTab === 'approval'" class="config-section">
+      <div class="config-actions">
+        <button class="btn btn-primary" :disabled="saving" @click="handleSave">
+          {{ saving ? '保存中...' : '保存配置' }}
+        </button>
+      </div>
+      <p v-if="saved" class="save-success" role="status">配置已保存</p>
+    </div>
+
+    <!-- 审批规则 -->
+    <div v-if="activeTab === 'approval'" class="card config-content">
+      <div class="config-section">
         <h2>审批规则</h2>
         <div class="form-group">
           <label class="form-label" for="approvalThreshold">需审批的金额阈值（元）</label>
@@ -80,7 +103,17 @@
           <input id="approvalTimeout" v-model.number="config.approvalTimeout" type="number" class="form-input" />
         </div>
       </div>
-      <div v-if="activeTab === 'system'" class="config-section">
+      <div class="config-actions">
+        <button class="btn btn-primary" :disabled="saving" @click="handleSave">
+          {{ saving ? '保存中...' : '保存配置' }}
+        </button>
+      </div>
+      <p v-if="saved" class="save-success" role="status">配置已保存</p>
+    </div>
+
+    <!-- 系统参数 -->
+    <div v-if="activeTab === 'system'" class="card config-content">
+      <div class="config-section">
         <h2>系统参数</h2>
         <div class="form-group">
           <label class="form-label" for="dataRetention">数据保留天数</label>
@@ -101,7 +134,410 @@
         <button class="btn btn-primary" :disabled="saving" @click="handleSave">
           {{ saving ? '保存中...' : '保存配置' }}
         </button>
-        <button class="btn" @click="handleReset">重置默认</button>
+      </div>
+      <p v-if="saved" class="save-success" role="status">配置已保存</p>
+    </div>
+
+    <!-- OTA 账号池 -->
+    <div v-if="activeTab === 'ota_accounts'" class="config-content config-content--wide">
+      <div class="sub-header">
+        <div>
+          <h2>OTA 账号池</h2>
+          <p class="sub-header__desc">管理携程、美团、飞猪等 OTA 平台的账号连接</p>
+        </div>
+        <button class="btn btn-primary" @click="showOtaForm = true">+ 新增账号</button>
+      </div>
+      <div v-if="showOtaForm" class="card inline-form">
+        <h3>{{ editingOta ? '编辑账号' : '新增 OTA 账号' }}</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="otaPlatform">平台</label>
+            <select id="otaPlatform" v-model="otaForm.platform" class="form-input">
+              <option value="">请选择</option>
+              <option value="ctrip">携程</option>
+              <option value="meituan">美团</option>
+              <option value="fliggy">飞猪</option>
+              <option value="qunar">去哪儿</option>
+              <option value="booking">Booking</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="otaAccount">账号名称</label>
+            <input id="otaAccount" v-model="otaForm.accountName" class="form-input" placeholder="例：旗舰店-01" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="otaUser">用户名 / 手机号</label>
+            <input id="otaUser" v-model="otaForm.username" class="form-input" placeholder="登录账号" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="otaPass">密码 / Token</label>
+            <input id="otaPass" v-model="otaForm.password" type="password" class="form-input" placeholder="••••••••" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" v-model="otaForm.enabled" />
+            启用自动同步
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" @click="saveOtaAccount">保存</button>
+          <button class="btn" @click="cancelOtaForm">取消</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="data-table" v-if="otaAccounts.length">
+          <thead>
+            <tr>
+              <th>平台</th>
+              <th>账号名称</th>
+              <th>用户名</th>
+              <th>状态</th>
+              <th>最后同步</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="acc in paginatedOta" :key="acc.id">
+              <td><span class="platform-badge" :class="'platform-badge--' + acc.platform">{{ platformLabel(acc.platform) }}</span></td>
+              <td>{{ acc.accountName }}</td>
+              <td>{{ acc.username }}</td>
+              <td>
+                <span class="status-tag" :class="acc.enabled ? 'status-tag--success' : 'status-tag--warning'">
+                  {{ acc.enabled ? '已启用' : '已停用' }}
+                </span>
+              </td>
+              <td>{{ acc.lastSync || '—' }}</td>
+              <td class="table-actions">
+                <button class="btn-link" @click="editOtaAccount(acc)">编辑</button>
+                <button class="btn-link btn-link--danger" @click="confirmDeleteOta(acc)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state">
+          <p>暂无 OTA 账号</p>
+          <p class="empty-state__hint">点击「新增账号」添加第一个 OTA 平台连接</p>
+        </div>
+        <div v-if="otaTotalPages > 1" class="pagination">
+          <button class="btn btn-sm" :disabled="otaPage <= 1" @click="otaPage--">上一页</button>
+          <span class="pagination__info">{{ otaPage }} / {{ otaTotalPages }}</span>
+          <button class="btn btn-sm" :disabled="otaPage >= otaTotalPages" @click="otaPage++">下一页</button>
+        </div>
+      </div>
+      <div v-if="confirmAction" class="modal-overlay" @click.self="confirmAction = null">
+        <div class="modal-card card" role="alertdialog" aria-label="确认操作">
+          <h3>{{ confirmAction.title }}</h3>
+          <p>{{ confirmAction.message }}</p>
+          <div class="form-actions">
+            <button class="btn btn-danger" @click="confirmAction.onConfirm">确认</button>
+            <button class="btn" @click="confirmAction = null">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 采集计划 -->
+    <div v-if="activeTab === 'collection'" class="config-content config-content--wide">
+      <div class="sub-header">
+        <div>
+          <h2>采集计划</h2>
+          <p class="sub-header__desc">配置竞品价格和房态数据的自动采集频率与范围</p>
+        </div>
+        <button class="btn btn-primary" @click="showCollectionForm = true">+ 新增计划</button>
+      </div>
+      <div v-if="showCollectionForm" class="card inline-form">
+        <h3>{{ editingCollection ? '编辑计划' : '新增采集计划' }}</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="collName">计划名称</label>
+            <input id="collName" v-model="collectionForm.name" class="form-input" placeholder="例：每日竞品价格采集" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="collPlatform">目标平台</label>
+            <select id="collPlatform" v-model="collectionForm.platform" class="form-input">
+              <option value="">请选择</option>
+              <option value="ctrip">携程</option>
+              <option value="meituan">美团</option>
+              <option value="fliggy">飞猪</option>
+              <option value="all">全部平台</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="collFreq">采集频率</label>
+            <select id="collFreq" v-model="collectionForm.frequency" class="form-input">
+              <option value="hourly">每小时</option>
+              <option value="daily">每天</option>
+              <option value="weekly">每周</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="collTime">执行时间</label>
+            <input id="collTime" v-model="collectionForm.executeTime" type="time" class="form-input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" v-model="collectionForm.includeOccupancy" />
+            同时采集入住率数据
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" v-model="collectionForm.enabled" />
+            启用计划
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" @click="saveCollectionPlan">保存</button>
+          <button class="btn" @click="cancelCollectionForm">取消</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="data-table" v-if="collectionPlans.length">
+          <thead>
+            <tr>
+              <th>计划名称</th>
+              <th>平台</th>
+              <th>频率</th>
+              <th>执行时间</th>
+              <th>状态</th>
+              <th>上次执行</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="plan in paginatedCollection" :key="plan.id">
+              <td>{{ plan.name }}</td>
+              <td><span class="platform-badge" :class="'platform-badge--' + plan.platform">{{ platformLabel(plan.platform) }}</span></td>
+              <td>{{ freqLabel(plan.frequency) }}</td>
+              <td>{{ plan.executeTime }}</td>
+              <td>
+                <span class="status-tag" :class="plan.enabled ? 'status-tag--success' : 'status-tag--warning'">
+                  {{ plan.enabled ? '运行中' : '已暂停' }}
+                </span>
+              </td>
+              <td>{{ plan.lastRun || '—' }}</td>
+              <td class="table-actions">
+                <button class="btn-link" @click="editCollectionPlan(plan)">编辑</button>
+                <button class="btn-link" @click="runCollectionNow(plan)">立即执行</button>
+                <button class="btn-link btn-link--danger" @click="confirmDeleteCollection(plan)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state">
+          <p>暂无采集计划</p>
+          <p class="empty-state__hint">创建采集计划以自动获取竞品数据</p>
+        </div>
+        <div v-if="collectionTotalPages > 1" class="pagination">
+          <button class="btn btn-sm" :disabled="collectionPage <= 1" @click="collectionPage--">上一页</button>
+          <span class="pagination__info">{{ collectionPage }} / {{ collectionTotalPages }}</span>
+          <button class="btn btn-sm" :disabled="collectionPage >= collectionTotalPages" @click="collectionPage++">下一页</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PMS 导入配置 -->
+    <div v-if="activeTab === 'pms_import'" class="config-content config-content--wide">
+      <div class="sub-header">
+        <div>
+          <h2>PMS 导入配置</h2>
+          <p class="sub-header__desc">配置 PMS 系统数据导入规则与字段映射</p>
+        </div>
+      </div>
+      <div class="card config-section">
+        <h3>导入设置</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pmsType">PMS 系统类型</label>
+            <select id="pmsType" v-model="pmsConfig.systemType" class="form-input">
+              <option value="">请选择</option>
+              <option value="opera">Oracle OPERA</option>
+              <option value="cloudbeds">Cloudbeds</option>
+              <option value="greencloud">绿云</option>
+              <option value="zhuzhe">住哲</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pmsApiUrl">API 地址</label>
+            <input id="pmsApiUrl" v-model="pmsConfig.apiUrl" class="form-input" placeholder="https://your-pms.com/api" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pmsApiKey">API Key</label>
+            <input id="pmsApiKey" v-model="pmsConfig.apiKey" type="password" class="form-input" placeholder="••••••••" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pmsSyncFreq">同步频率</label>
+            <select id="pmsSyncFreq" v-model="pmsConfig.syncFrequency" class="form-input">
+              <option value="realtime">实时</option>
+              <option value="hourly">每小时</option>
+              <option value="daily">每天</option>
+              <option value="manual">手动</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" v-model="pmsConfig.autoImport" />
+            启用自动导入
+          </label>
+        </div>
+      </div>
+      <div class="card config-section">
+        <h3>字段映射</h3>
+        <p class="section-desc">将 PMS 字段映射到系统字段</p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>系统字段</th>
+              <th>PMS 字段</th>
+              <th>类型</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="mapping in pmsConfig.fieldMappings" :key="mapping.systemField">
+              <td>{{ mapping.systemFieldLabel }}</td>
+              <td>
+                <input v-model="mapping.pmsField" class="form-input form-input--sm" :placeholder="'PMS 中的字段名'" />
+              </td>
+              <td><span class="type-badge">{{ mapping.type }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card config-section">
+        <h3>导入日志</h3>
+        <table class="data-table" v-if="pmsImportLogs.length">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>类型</th>
+              <th>记录数</th>
+              <th>状态</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in pmsImportLogs" :key="log.id">
+              <td>{{ log.time }}</td>
+              <td>{{ log.type }}</td>
+              <td>{{ log.records }}</td>
+              <td>
+                <span class="status-tag" :class="log.status === 'success' ? 'status-tag--success' : 'status-tag--error'">
+                  {{ log.status === 'success' ? '成功' : '失败' }}
+                </span>
+              </td>
+              <td>{{ log.note || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state">
+          <p>暂无导入记录</p>
+          <p class="empty-state__hint">配置完成后，导入日志将在此显示</p>
+        </div>
+      </div>
+      <div class="config-actions">
+        <button class="btn btn-primary" :disabled="saving" @click="handleSave">保存配置</button>
+        <button class="btn" @click="testPmsConnection">测试连接</button>
+      </div>
+      <p v-if="saved" class="save-success" role="status">配置已保存</p>
+      <p v-if="pmsTestResult" class="pms-test-result" :class="'pms-test-result--' + pmsTestResult.status" role="status">
+        {{ pmsTestResult.message }}
+      </p>
+    </div>
+
+    <!-- 通知审批 -->
+    <div v-if="activeTab === 'notify_approval'" class="config-content config-content--wide">
+      <div class="sub-header">
+        <div>
+          <h2>通知审批</h2>
+          <p class="sub-header__desc">配置需要审批的通知类型与审批流程</p>
+        </div>
+      </div>
+      <div class="card config-section">
+        <h3>审批通知规则</h3>
+        <div v-for="rule in notifyApprovalRules" :key="rule.id" class="notify-rule">
+          <div class="notify-rule__header">
+            <label class="form-label notify-rule__toggle">
+              <input type="checkbox" v-model="rule.enabled" />
+              {{ rule.label }}
+            </label>
+            <span class="status-tag" :class="rule.enabled ? 'status-tag--success' : 'status-tag--warning'">
+              {{ rule.enabled ? '已启用' : '已停用' }}
+            </span>
+          </div>
+          <div class="notify-rule__body">
+            <div class="form-group">
+              <label class="form-label" :for="'notify-channel-' + rule.id">通知渠道</label>
+              <div class="checkbox-group">
+                <label v-for="ch in notifyChannels" :key="ch.value">
+                  <input type="checkbox" :value="ch.value" v-model="rule.channels" />
+                  {{ ch.label }}
+                </label>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" :for="'notify-level-' + rule.id">审批级别</label>
+                <select :id="'notify-level-' + rule.id" v-model="rule.approvalLevel" class="form-input">
+                  <option value="auto">自动审批</option>
+                  <option value="manager">经理审批</option>
+                  <option value="director">总监审批</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" :for="'notify-timeout-' + rule.id">超时处理</label>
+                <select :id="'notify-timeout-' + rule.id" v-model="rule.timeoutAction" class="form-input">
+                  <option value="remind">提醒审批人</option>
+                  <option value="escalate">自动升级</option>
+                  <option value="auto_approve">自动通过</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card config-section">
+        <h3>审批人配置</h3>
+        <table class="data-table" v-if="approvers.length">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>角色</th>
+              <th>审批范围</th>
+              <th>通知方式</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="approver in approvers" :key="approver.id">
+              <td>{{ approver.name }}</td>
+              <td>{{ approver.role }}</td>
+              <td>{{ approver.scope }}</td>
+              <td>{{ approver.notifyMethod }}</td>
+              <td class="table-actions">
+                <button class="btn-link" @click="editApprover(approver)">编辑</button>
+                <button class="btn-link btn-link--danger" @click="removeApprover(approver)">移除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state">
+          <p>暂无审批人</p>
+          <p class="empty-state__hint">添加审批人以启用审批流程</p>
+        </div>
+        <button class="btn" @click="addApprover" style="margin-top: var(--spacing-md)">+ 添加审批人</button>
+      </div>
+      <div class="config-actions">
+        <button class="btn btn-primary" :disabled="saving" @click="handleSave">保存配置</button>
       </div>
       <p v-if="saved" class="save-success" role="status">配置已保存</p>
     </div>
@@ -109,7 +545,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 
 const activeTab = ref('pricing')
 const saving = ref(false)
@@ -120,6 +556,10 @@ const tabs = [
   { id: 'notification', label: '通知设置' },
   { id: 'approval', label: '审批规则' },
   { id: 'system', label: '系统参数' },
+  { id: 'ota_accounts', label: 'OTA 账号池' },
+  { id: 'collection', label: '采集计划' },
+  { id: 'pms_import', label: 'PMS 导入' },
+  { id: 'notify_approval', label: '通知审批' },
 ]
 
 const config = reactive({
@@ -167,6 +607,240 @@ function handleReset() {
   config.maintenanceMode = false
   saved.value = false
 }
+
+// --- OTA 账号池 ---
+interface OtaAccount {
+  id: number
+  platform: string
+  accountName: string
+  username: string
+  enabled: boolean
+  lastSync: string
+}
+
+const otaAccounts = ref<OtaAccount[]>([
+  { id: 1, platform: 'ctrip', accountName: '旗舰店-01', username: 'hotel_flagship', enabled: true, lastSync: '2026-07-27 08:30' },
+  { id: 2, platform: 'meituan', accountName: '美团直营店', username: 'meituan_direct', enabled: true, lastSync: '2026-07-27 07:00' },
+  { id: 3, platform: 'fliggy', accountName: '飞猪旅行店', username: 'fliggy_travel', enabled: false, lastSync: '' },
+])
+const showOtaForm = ref(false)
+const editingOta = ref<OtaAccount | null>(null)
+const otaForm = reactive({ platform: '', accountName: '', username: '', password: '', enabled: true })
+const otaPage = ref(1)
+const OTA_PER_PAGE = 10
+
+const otaTotalPages = computed(() => Math.ceil(otaAccounts.value.length / OTA_PER_PAGE))
+const paginatedOta = computed(() => {
+  const start = (otaPage.value - 1) * OTA_PER_PAGE
+  return otaAccounts.value.slice(start, start + OTA_PER_PAGE)
+})
+
+function saveOtaAccount() {
+  if (editingOta.value) {
+    Object.assign(editingOta.value, { platform: otaForm.platform, accountName: otaForm.accountName, username: otaForm.username, enabled: otaForm.enabled })
+  } else {
+    otaAccounts.value.push({
+      id: Date.now(),
+      platform: otaForm.platform,
+      accountName: otaForm.accountName,
+      username: otaForm.username,
+      enabled: otaForm.enabled,
+      lastSync: '',
+    })
+  }
+  cancelOtaForm()
+}
+
+function editOtaAccount(acc: OtaAccount) {
+  editingOta.value = acc
+  Object.assign(otaForm, { platform: acc.platform, accountName: acc.accountName, username: acc.username, password: '', enabled: acc.enabled })
+  showOtaForm.value = true
+}
+
+function cancelOtaForm() {
+  showOtaForm.value = false
+  editingOta.value = null
+  Object.assign(otaForm, { platform: '', accountName: '', username: '', password: '', enabled: true })
+}
+
+// --- 采集计划 ---
+interface CollectionPlan {
+  id: number
+  name: string
+  platform: string
+  frequency: string
+  executeTime: string
+  enabled: boolean
+  includeOccupancy: boolean
+  lastRun: string
+}
+
+const collectionPlans = ref<CollectionPlan[]>([
+  { id: 1, name: '每日竞品价格采集', platform: 'all', frequency: 'daily', executeTime: '06:00', enabled: true, includeOccupancy: true, lastRun: '2026-07-27 06:00' },
+  { id: 2, name: '携程实时价格', platform: 'ctrip', frequency: 'hourly', executeTime: '00:00', enabled: true, includeOccupancy: false, lastRun: '2026-07-27 10:00' },
+])
+const showCollectionForm = ref(false)
+const editingCollection = ref<CollectionPlan | null>(null)
+const collectionForm = reactive({ name: '', platform: '', frequency: 'daily', executeTime: '06:00', enabled: true, includeOccupancy: false })
+const collectionPage = ref(1)
+const COLL_PER_PAGE = 10
+
+const collectionTotalPages = computed(() => Math.ceil(collectionPlans.value.length / COLL_PER_PAGE))
+const paginatedCollection = computed(() => {
+  const start = (collectionPage.value - 1) * COLL_PER_PAGE
+  return collectionPlans.value.slice(start, start + COLL_PER_PAGE)
+})
+
+function saveCollectionPlan() {
+  if (editingCollection.value) {
+    Object.assign(editingCollection.value, { ...collectionForm })
+  } else {
+    collectionPlans.value.push({ id: Date.now(), ...collectionForm, lastRun: '' })
+  }
+  cancelCollectionForm()
+}
+
+function editCollectionPlan(plan: CollectionPlan) {
+  editingCollection.value = plan
+  Object.assign(collectionForm, { name: plan.name, platform: plan.platform, frequency: plan.frequency, executeTime: plan.executeTime, enabled: plan.enabled, includeOccupancy: plan.includeOccupancy })
+  showCollectionForm.value = true
+}
+
+function cancelCollectionForm() {
+  showCollectionForm.value = false
+  editingCollection.value = null
+  Object.assign(collectionForm, { name: '', platform: '', frequency: 'daily', executeTime: '06:00', enabled: true, includeOccupancy: false })
+}
+
+function runCollectionNow(plan: CollectionPlan) {
+  plan.lastRun = new Date().toLocaleString('zh-CN')
+}
+
+// --- PMS 导入 ---
+const pmsConfig = reactive({
+  systemType: '',
+  apiUrl: '',
+  apiKey: '',
+  syncFrequency: 'hourly',
+  autoImport: false,
+  fieldMappings: [
+    { systemField: 'roomNumber', systemFieldLabel: '房间号', pmsField: 'rm_no', type: 'string' },
+    { systemField: 'roomType', systemFieldLabel: '房型', pmsField: 'rm_type', type: 'string' },
+    { systemField: 'price', systemFieldLabel: '房价', pmsField: 'rate', type: 'number' },
+    { systemField: 'occupancy', systemFieldLabel: '入住状态', pmsField: 'occ_status', type: 'string' },
+    { systemField: 'guestName', systemFieldLabel: '宾客姓名', pmsField: 'guest_name', type: 'string' },
+    { systemField: 'checkIn', systemFieldLabel: '入住日期', pmsField: 'check_in_dt', type: 'date' },
+    { systemField: 'checkOut', systemFieldLabel: '退房日期', pmsField: 'check_out_dt', type: 'date' },
+  ],
+})
+
+const pmsImportLogs = ref([
+  { id: 1, time: '2026-07-27 06:00', type: '自动同步', records: 128, status: 'success', note: '' },
+  { id: 2, time: '2026-07-26 18:00', type: '手动导入', records: 0, status: 'failed', note: '连接超时' },
+])
+
+const pmsTestResult = ref<{ status: string; message: string } | null>(null)
+
+function testPmsConnection() {
+  pmsTestResult.value = { status: 'testing', message: '正在测试连接...' }
+  setTimeout(() => {
+    if (pmsConfig.apiUrl && pmsConfig.apiKey) {
+      pmsTestResult.value = { status: 'success', message: '连接成功！PMS 系统响应正常' }
+    } else {
+      pmsTestResult.value = { status: 'error', message: '连接失败：请填写 API 地址和密钥' }
+    }
+  }, 1500)
+}
+
+// --- 通知审批 ---
+interface NotifyRule {
+  id: string
+  label: string
+  enabled: boolean
+  channels: string[]
+  approvalLevel: string
+  timeoutAction: string
+}
+
+const notifyApprovalRules = ref<NotifyRule[]>([
+  { id: 'price_change', label: '价格调整通知', enabled: true, channels: ['email', 'sms'], approvalLevel: 'manager', timeoutAction: 'remind' },
+  { id: 'inventory_release', label: '库存释放通知', enabled: true, channels: ['email'], approvalLevel: 'auto', timeoutAction: 'auto_approve' },
+  { id: 'promotion', label: '促销活动通知', enabled: false, channels: ['email', 'sms', 'wechat'], approvalLevel: 'director', timeoutAction: 'escalate' },
+])
+
+const notifyChannels = [
+  { label: '邮件', value: 'email' },
+  { label: '短信', value: 'sms' },
+  { label: '企业微信', value: 'wechat' },
+  { label: '钉钉', value: 'dingtalk' },
+]
+
+interface Approver {
+  id: number
+  name: string
+  role: string
+  scope: string
+  notifyMethod: string
+}
+
+const approvers = ref<Approver[]>([
+  { id: 1, name: '张经理', role: '收益经理', scope: '价格调整 ≤ ¥5000', notifyMethod: '邮件 + 短信' },
+  { id: 2, name: '李总监', role: '运营总监', scope: '促销活动', notifyMethod: '邮件 + 企业微信' },
+])
+
+function addApprover() {
+  approvers.value.push({ id: Date.now(), name: '新审批人', role: '待分配', scope: '全部', notifyMethod: '邮件' })
+}
+
+function editApprover(_approver: Approver) {
+  // 可扩展为弹窗编辑
+}
+
+function removeApprover(approver: Approver) {
+  approvers.value = approvers.value.filter((a) => a.id !== approver.id)
+}
+
+// --- 确认弹窗 ---
+interface ConfirmAction {
+  title: string
+  message: string
+  onConfirm: () => void
+}
+
+const confirmAction = ref<ConfirmAction | null>(null)
+
+function confirmDeleteOta(acc: OtaAccount) {
+  confirmAction.value = {
+    title: '删除 OTA 账号',
+    message: `确认删除「${acc.accountName}」？删除后将停止该平台的数据同步。`,
+    onConfirm: () => {
+      otaAccounts.value = otaAccounts.value.filter((a) => a.id !== acc.id)
+      confirmAction.value = null
+    },
+  }
+}
+
+function confirmDeleteCollection(plan: CollectionPlan) {
+  confirmAction.value = {
+    title: '删除采集计划',
+    message: `确认删除「${plan.name}」？删除后将不再自动采集该平台数据。`,
+    onConfirm: () => {
+      collectionPlans.value = collectionPlans.value.filter((p) => p.id !== plan.id)
+      confirmAction.value = null
+    },
+  }
+}
+
+// --- 工具函数 ---
+function platformLabel(p: string) {
+  const map: Record<string, string> = { ctrip: '携程', meituan: '美团', fliggy: '飞猪', qunar: '去哪儿', booking: 'Booking', all: '全部' }
+  return map[p] || p
+}
+
+function freqLabel(f: string) {
+  const map: Record<string, string> = { hourly: '每小时', daily: '每天', weekly: '每周' }
+  return map[f] || f
+}
 </script>
 
 <style scoped>
@@ -175,6 +849,7 @@ function handleReset() {
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-lg);
   border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
 }
 
 .config-tab {
@@ -185,6 +860,7 @@ function handleReset() {
   color: var(--color-text-secondary);
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .config-tab:hover {
@@ -201,7 +877,12 @@ function handleReset() {
   max-width: 600px;
 }
 
-.config-section h2 {
+.config-content--wide {
+  max-width: 100%;
+}
+
+.config-section h2,
+.config-section h3 {
   font-size: var(--font-size-lg);
   font-weight: 600;
   margin-bottom: var(--spacing-lg);
@@ -211,6 +892,12 @@ function handleReset() {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   margin-top: var(--spacing-xs);
+}
+
+.section-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--spacing-md);
 }
 
 .config-actions {
@@ -225,5 +912,288 @@ function handleReset() {
   color: var(--color-success);
   font-size: var(--font-size-sm);
   margin-top: var(--spacing-md);
+}
+
+/* Sub-header */
+.sub-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-lg);
+}
+
+.sub-header h2 {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+
+.sub-header__desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* Data tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.table-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.btn-link--danger {
+  color: var(--color-error);
+}
+
+/* Platform badges */
+.platform-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.platform-badge--ctrip { background: #e6f0ff; color: #2563eb; }
+.platform-badge--meituan { background: #fff7e6; color: #d97706; }
+.platform-badge--fliggy { background: #fce7f3; color: #db2777; }
+.platform-badge--qunar { background: #ecfdf5; color: #059669; }
+.platform-badge--booking { background: #eff6ff; color: #1d4ed8; }
+.platform-badge--all { background: #f3f4f6; color: #374151; }
+
+/* Type badges */
+.type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+/* Inline form */
+.inline-form {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
+.inline-form h3 {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.form-input--sm {
+  padding: 4px 8px;
+  font-size: var(--font-size-xs);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) 0;
+}
+
+.pagination__info {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: var(--font-size-xs);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-card {
+  max-width: 400px;
+  width: 90%;
+  padding: var(--spacing-lg);
+}
+
+.modal-card h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.modal-card p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Notify rules */
+.notify-rule {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+}
+
+.notify-rule__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notify-rule__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.notify-rule__body {
+  padding: var(--spacing-md);
+}
+
+.checkbox-group {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* PMS test result */
+.pms-test-result {
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+}
+
+.pms-test-result--success {
+  color: var(--color-success);
+  background: #f0fdf4;
+}
+
+.pms-test-result--error {
+  color: var(--color-error);
+  background: #fef2f2;
+}
+
+.pms-test-result--testing {
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xxl) var(--spacing-lg);
+  color: var(--color-text-tertiary);
+}
+
+.empty-state__hint {
+  font-size: var(--font-size-xs);
+  margin-top: var(--spacing-xs);
+}
+
+/* Danger button */
+.btn-danger {
+  background: var(--color-error);
+  color: #fff;
+  border: none;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sub-header {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .data-table {
+    font-size: var(--font-size-xs);
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
 }
 </style>
