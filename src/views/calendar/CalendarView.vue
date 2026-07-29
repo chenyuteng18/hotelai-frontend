@@ -1,135 +1,194 @@
 <template>
   <div class="calendar-page">
-    <div class="calendar-header">
-      <div class="calendar-header__left">
-        <h1>定价日历</h1>
-        <p class="calendar-header__subtitle">月度运营数据概览</p>
+    <div class="calendar-toolbar">
+      <div class="calendar-toolbar__nav">
+        <button class="btn calendar-nav" aria-label="上个月" @click="prevMonth">← 上月</button>
+        <h1 class="calendar-toolbar__title">{{ currentMonthLabel }}</h1>
+        <button class="btn calendar-nav" aria-label="下个月" @click="nextMonth">下月 →</button>
+        <button class="btn btn-primary calendar-today-btn" @click="goToday">今天</button>
       </div>
-      <div class="calendar-header__right">
-        <button class="btn calendar-nav" aria-label="上个月" @click="prevMonth">
-          ← 上月
-        </button>
-        <span class="calendar-header__month">{{ currentMonthLabel }}</span>
-        <button class="btn calendar-nav" aria-label="下个月" @click="nextMonth">
-          下月 →
-        </button>
-      </div>
-    </div>
-    <DataFreshness :lastUpdated="dataLastUpdated" :staleThreshold="2" @refresh="fetchCalendarData" />
-    <div class="calendar-grid">
-      <div v-for="day in weekDays" :key="day" class="calendar-weekday">{{ day }}</div>
-      <div
-        v-for="(cell, i) in calendarCells"
-        :key="i"
-        class="calendar-cell"
-        :class="{ 'calendar-cell--empty': !cell.day }"
-      >
-        <div v-if="cell.day" class="day-card" :class="[dayCardClass(cell), { 'day-card--expanded': expandedDay === cell.day }]" @click="toggleDayDetail(cell)">
-          <div class="day-card__header">
-            <span class="day-card__date">{{ cell.day }}日</span>
-            <span class="day-card__weekday">{{ cell.weekday }}</span>
-            <span class="day-card__status" :aria-label="statusLabel(cell)">{{ statusIcon(cell) }}</span>
-          </div>
-          <div class="day-card__meta">
-            <span class="day-card__otb">OTB {{ cell.otbTime || '--:--' }}</span>
-          </div>
-          <div class="day-card__metrics">
-            <div class="metric-row">
-              <span class="metric-label">实际入住</span>
-              <span class="metric-value">{{ cell.actualOccupancy ?? '--' }}%</span>
-            </div>
-            <div class="metric-row">
-              <span class="metric-label">预测入住</span>
-              <span class="metric-value metric-value--predict">
-                {{ cell.predictedOccupancy ?? '--' }}%
-                <span v-if="cell.accuracy" class="accuracy">准确率{{ cell.accuracy }}%</span>
-              </span>
-            </div>
-            <div class="metric-row">
-              <span class="metric-label">ADR</span>
-              <span class="metric-value">
-                {{ formatCurrency(cell.adr) }}
-                <span v-if="cell.adrChange != null" :class="changeClass(cell.adrChange)">
-                  ({{ cell.adrChange >= 0 ? '+' : '' }}{{ cell.adrChange }}%)
-                </span>
-              </span>
-            </div>
-            <div class="metric-row">
-              <span class="metric-label">RevPAR</span>
-              <span class="metric-value">
-                {{ formatCurrency(cell.revpar) }}
-                <span v-if="cell.revparChange != null" :class="changeClass(cell.revparChange)">
-                  ({{ cell.revparChange >= 0 ? '+' : '' }}{{ cell.revparChange }}%)
-                </span>
-              </span>
-            </div>
-          </div>
-          <div class="day-card__revenue">
-            <div class="revenue-row">
-              <span class="revenue-label">Act.Rev</span>
-              <span class="revenue-value">{{ formatCurrency(cell.actualRevenue) }}</span>
-            </div>
-            <div class="revenue-row">
-              <span class="revenue-label">Fct.Rev</span>
-              <span class="revenue-value revenue-value--fct">{{ formatCurrency(cell.forecastRevenue) }}</span>
-            </div>
-            <div class="progress-bar" role="img" :aria-label="'收入完成度 ' + completionPercent(cell) + '%'">
-              <div
-                class="progress-bar__fill"
-                :class="completionClass(cell)"
-                :style="{ width: completionPercent(cell) + '%' }"
-              ></div>
-            </div>
-          </div>
-          <div v-if="expandedDay === cell.day" class="day-detail" @click.stop>
-            <div class="day-detail__section">
-              <h4>竞对价格</h4>
-              <div v-if="dayDetailLoading" class="day-detail__loading">加载中...</div>
-              <div v-else-if="dayDetail?.competitors?.length" class="competitor-list">
-                <div v-for="comp in dayDetail.competitors" :key="comp.name" class="competitor-item">
-                  <span class="competitor-item__name">{{ comp.name }}</span>
-                  <span class="competitor-item__price">{{ formatCurrency(comp.price) }}</span>
-                </div>
-              </div>
-              <p v-else class="day-detail__empty">暂无竞对数据</p>
-            </div>
-            <div class="day-detail__section">
-              <h4>AI 建议价</h4>
-              <div v-if="dayDetail?.suggestedPrice" class="suggested-price">
-                <span class="suggested-price__value">{{ formatCurrency(dayDetail.suggestedPrice) }}</span>
-                <span v-if="dayDetail.confidence" class="suggested-price__confidence">置信度 {{ dayDetail.confidence }}%</span>
-              </div>
-              <p v-else class="day-detail__empty">暂无建议价</p>
-            </div>
-            <div class="day-detail__section">
-              <h4>执行记录</h4>
-              <div v-if="dayDetail?.executions?.length" class="execution-list">
-                <div v-for="exec in dayDetail.executions" :key="exec.time" class="execution-item">
-                  <span class="execution-item__time">{{ exec.time }}</span>
-                  <span class="execution-item__action">{{ exec.action }}</span>
-                  <span class="execution-item__result" :class="'execution-item__result--' + exec.status">{{ exec.statusLabel }}</span>
-                </div>
-              </div>
-              <p v-else class="day-detail__empty">暂无执行记录</p>
-            </div>
-          </div>
+
+      <div class="calendar-toolbar__right">
+        <div class="freshness" :class="{ 'freshness--stale': isDataStale }" role="status">
+          <span class="freshness__dot" aria-hidden="true"></span>
+          <span class="freshness__text">数据更新于 {{ freshTimeLabel }}</span>
+          <span v-if="isDataStale" class="freshness__warning">数据已超 4 小时未更新</span>
+        </div>
+        <div class="calendar-legend" aria-hidden="true">
+          <span class="legend-item"><i class="legend-swatch legend-swatch--green"></i>达标</span>
+          <span class="legend-item"><i class="legend-swatch legend-swatch--yellow"></i>预警</span>
+          <span class="legend-item"><i class="legend-swatch legend-swatch--red"></i>未达标</span>
+          <span class="legend-item"><i class="legend-swatch legend-swatch--gray"></i>暂无数据</span>
         </div>
       </div>
     </div>
-    <p v-if="loading" class="loading-state">加载中...</p>
-    <div v-if="!loading && !calendarCells.some(c => c.day)" class="empty-state">
+
+    <div v-if="loading" class="skeleton-grid" aria-hidden="true">
+      <div v-for="n in 42" :key="n" class="skeleton-card"></div>
+    </div>
+
+    <div v-else class="calendar-grid">
+      <div v-for="day in weekDays" :key="day" class="calendar-weekday">{{ day }}</div>
+      <template v-for="(cell, i) in calendarCells" :key="i">
+        <div v-if="cell.type !== 'current'" class="calendar-cell calendar-cell--other">
+          <span class="day-other">{{ cell.day }}</span>
+        </div>
+        <div v-else class="calendar-cell">
+          <button
+            type="button"
+            class="day-card"
+            :class="[
+              'day-card--' + dayStatus(cell.data),
+              {
+                'day-card--today': cell.isToday,
+                'day-card--weekend': cell.isWeekend,
+                'day-card--selected': selectedDay === cell.day,
+                'day-card--flash': cell.isToday && flashToday,
+              },
+            ]"
+            :aria-expanded="selectedDay === cell.day"
+            :aria-label="`${currentMonthLabel}${cell.day}日 ${statusLabel(cell.data)}`"
+            @click="toggleDayDetail(cell)"
+          >
+            <span class="day-card__status-bar" aria-hidden="true"></span>
+            <span class="day-card__header">
+              <span class="day-card__date">{{ cell.day }}</span>
+              <span class="day-card__weekday">{{ cell.weekday }}</span>
+              <span v-if="cell.isToday" class="day-card__today-badge">今天</span>
+            </span>
+
+            <template v-if="hasDayData(cell.data)">
+              <span class="day-card__metrics">
+                <span class="metric-row">
+                  <span class="metric-label">入住率</span>
+                  <span class="metric-value">{{ cell.data!.actualOccupancy ?? '--' }}%</span>
+                </span>
+                <span class="metric-row">
+                  <span class="metric-label">ADR</span>
+                  <span class="metric-value">
+                    {{ formatCurrency(cell.data!.adr) }}
+                    <span v-if="cell.data!.adrChange != null" :class="changeClass(cell.data!.adrChange)">
+                      {{ cell.data!.adrChange >= 0 ? '↑' : '↓' }}{{ Math.abs(cell.data!.adrChange) }}%
+                    </span>
+                  </span>
+                </span>
+                <span class="metric-row">
+                  <span class="metric-label">RevPAR</span>
+                  <span class="metric-value">{{ formatCurrency(cell.data!.revpar) }}</span>
+                </span>
+                <span
+                  class="progress-bar"
+                  role="img"
+                  :aria-label="'收入完成度 ' + completionPercent(cell.data) + '%'"
+                >
+                  <span
+                    class="progress-bar__fill"
+                    :class="'progress-bar__fill--' + dayStatus(cell.data)"
+                    :style="{ width: completionPercent(cell.data) + '%' }"
+                  ></span>
+                </span>
+                <span class="metric-row day-card__footer">
+                  <span class="metric-label">收入 {{ formatCurrency(cell.data!.actualRevenue) }}</span>
+                  <span class="metric-label">OTB {{ cell.data!.otbTime || '--:--' }}</span>
+                </span>
+              </span>
+            </template>
+            <span v-else class="day-card__empty">暂无数据</span>
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <transition name="panel">
+      <section
+        v-if="selectedDay != null && !loading"
+        class="detail-panel"
+        :aria-label="`${selectedDateLabel} 定价详情`"
+      >
+        <header class="detail-panel__header">
+          <h3 class="detail-panel__date">{{ selectedDateLabel }}</h3>
+          <span v-if="selectedHasData && selectedCell?.data" class="detail-panel__summary">
+            入住率 {{ selectedCell.data.actualOccupancy ?? '--' }}% · ADR {{ formatCurrency(selectedCell.data.adr) }} ·
+            RevPAR {{ formatCurrency(selectedCell.data.revpar) }} · 收入 {{ formatCurrency(selectedCell.data.actualRevenue) }}
+          </span>
+          <span v-else class="detail-panel__no-data">该日无定价记录</span>
+        </header>
+
+        <div class="detail-panel__columns">
+          <template v-if="selectedHasData">
+            <div class="detail-panel__col">
+              <h4 class="detail-panel__col-title">竞对价格</h4>
+              <div v-if="dayDetailLoading" class="detail-panel__loading">加载中...</div>
+              <ul v-else-if="dayDetail?.competitors?.length" class="detail-panel__list">
+                <li v-for="comp in dayDetail.competitors" :key="comp.name" class="competitor-row">
+                  <span class="competitor-row__name">{{ comp.name }}</span>
+                  <span class="competitor-row__price">{{ formatCurrency(comp.price) }}</span>
+                </li>
+              </ul>
+              <div v-else class="detail-panel__empty">暂无数据</div>
+            </div>
+
+            <div class="detail-panel__col">
+              <h4 class="detail-panel__col-title">AI 建议价</h4>
+              <div v-if="dayDetailLoading" class="detail-panel__loading">加载中...</div>
+              <div v-else-if="dayDetail?.suggestedPrice != null" class="ai-card">
+                <span class="ai-card__price">{{ formatCurrency(dayDetail.suggestedPrice) }}</span>
+                <span v-if="dayDetail.confidence != null" class="ai-card__confidence">
+                  <span class="ai-card__confidence-label">置信度</span>
+                  <span class="ai-card__confidence-bar">
+                    <span class="ai-card__confidence-fill" :style="{ width: dayDetail.confidence + '%' }"></span>
+                  </span>
+                  <span class="ai-card__confidence-value">{{ dayDetail.confidence }}%</span>
+                </span>
+              </div>
+              <div v-else class="detail-panel__empty">暂无数据</div>
+            </div>
+
+            <div class="detail-panel__col">
+              <h4 class="detail-panel__col-title">执行记录</h4>
+              <div v-if="dayDetailLoading" class="detail-panel__loading">加载中...</div>
+              <ol v-else-if="dayDetail?.executions?.length" class="execution-timeline">
+                <li v-for="(exec, idx) in dayDetail.executions" :key="idx" class="execution-timeline__item">
+                  <span
+                    class="execution-timeline__dot"
+                    :class="exec.status === 'success' ? 'execution-timeline__dot--ok' : 'execution-timeline__dot--fail'"
+                    aria-hidden="true"
+                  ></span>
+                  <span class="execution-timeline__time">{{ exec.time }}</span>
+                  <span class="execution-timeline__action">{{ exec.action }}</span>
+                  <span class="execution-timeline__result" :class="'execution-timeline__result--' + exec.status">
+                    {{ exec.statusLabel }}
+                  </span>
+                </li>
+              </ol>
+              <div v-else class="detail-panel__empty">暂无数据</div>
+            </div>
+          </template>
+          <div v-else class="detail-panel__full-empty">该日无定价记录</div>
+        </div>
+      </section>
+    </transition>
+
+    <div v-if="!loading && !calendarCells.some((c) => c.type === 'current' && hasDayData(c.data))" class="empty-state">
       <p>暂无日历数据</p>
       <p class="empty-state__hint">请切换月份或稍后刷新</p>
       <button class="btn btn-primary" style="margin-top: var(--spacing-md)" @click="fetchCalendarData">刷新数据</button>
     </div>
-    <AppToast :show="toastVisible" :message="toastMessage" type="error" :retryable="true" @update:show="toastVisible = $event" @retry="fetchCalendarData" />
+
+    <AppToast
+      :show="toastVisible"
+      :message="toastMessage"
+      type="error"
+      :retryable="true"
+      @update:show="toastVisible = $event"
+      @retry="fetchCalendarData"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import axios from 'axios'
-import DataFreshness from '../../components/common/DataFreshness.vue'
 import AppToast from '../../components/common/AppToast.vue'
 import { formatCurrency } from '../../utils/format'
 
@@ -156,34 +215,35 @@ interface DayDetail {
   executions: { time: string; action: string; status: string; statusLabel: string }[]
 }
 
+type CellType = 'prev' | 'current' | 'next'
+
+interface CalendarCell {
+  type: CellType
+  day: number
+  weekday?: string
+  isWeekend: boolean
+  isToday: boolean
+  data?: CalendarDay | null
+}
+
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://118.190.207.62:8080/api',
   timeout: 15000,
 })
 
-type CalendarCell = {
-  day: number | null
-  weekday: string
-  otbTime?: string | null
-  actualOccupancy?: number | null
-  predictedOccupancy?: number | null
-  accuracy?: number | null
-  adr?: number | null
-  adrChange?: number | null
-  revpar?: number | null
-  revparChange?: number | null
-  actualRevenue?: number | null
-  forecastRevenue?: number | null
-}
+const STALE_HOURS = 4
 
-const currentYear = ref(2026)
-const currentMonth = ref(7)
+const now = new Date()
+const currentYear = ref(now.getFullYear())
+const currentMonth = ref(now.getMonth() + 1)
 const calendarData = ref<CalendarDay[]>([])
 const loading = ref(false)
 const dataLastUpdated = ref('')
-const expandedDay = ref<number | null>(null)
+const selectedDay = ref<number | null>(null)
 const dayDetail = ref<DayDetail | null>(null)
 const dayDetailLoading = ref(false)
+const flashToday = ref(false)
+const pendingTodayFlash = ref(false)
 const toastVisible = ref(false)
 const toastMessage = ref('')
 
@@ -192,47 +252,113 @@ const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五'
 
 const currentMonthLabel = computed(() => `${currentYear.value}年${currentMonth.value}月`)
 
-const calendarCells = computed(() => {
+function isWeekendDate(date: Date): boolean {
+  const d = date.getDay()
+  return d === 0 || d === 6
+}
+
+function isSameDate(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+const calendarCells = computed<CalendarCell[]>(() => {
   const year = currentYear.value
   const month = currentMonth.value
   const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
-  const daysInMonth = lastDay.getDate()
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const daysInPrevMonth = new Date(year, month - 1, 0).getDate()
+  const today = new Date()
+
   let startWeekday = firstDay.getDay()
   if (startWeekday === 0) startWeekday = 7
   startWeekday -= 1
 
   const cells: CalendarCell[] = []
 
-  for (let i = 0; i < startWeekday; i++) {
-    cells.push({ day: null, weekday: '' })
+  for (let i = startWeekday - 1; i >= 0; i--) {
+    const d = daysInPrevMonth - i
+    const date = new Date(year, month - 2, d)
+    cells.push({ type: 'prev', day: d, isWeekend: isWeekendDate(date), isToday: isSameDate(date, today) })
   }
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month - 1, d)
-    const wd = weekdayNames[date.getDay()]
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const existing = calendarData.value.find((c) => c.date === dateStr)
+    const existing = calendarData.value.find((c) => c.date === dateStr) || null
     cells.push({
+      type: 'current',
       day: d,
-      weekday: wd,
-      ...(existing || {
-        otbTime: null,
-        actualOccupancy: null,
-        predictedOccupancy: null,
-        accuracy: null,
-        adr: null,
-        adrChange: null,
-        revpar: null,
-        revparChange: null,
-        actualRevenue: null,
-        forecastRevenue: null,
-      }),
+      weekday: weekdayNames[date.getDay()],
+      isWeekend: isWeekendDate(date),
+      isToday: isSameDate(date, today),
+      data: existing,
     })
+  }
+
+  let nextDay = 1
+  while (cells.length < 42) {
+    const date = new Date(year, month, nextDay)
+    cells.push({ type: 'next', day: nextDay, isWeekend: isWeekendDate(date), isToday: isSameDate(date, today) })
+    nextDay++
   }
 
   return cells
 })
+
+const selectedCell = computed<CalendarCell | null>(() => {
+  if (selectedDay.value == null) return null
+  return calendarCells.value.find((c) => c.type === 'current' && c.day === selectedDay.value) || null
+})
+
+const selectedHasData = computed(() => hasDayData(selectedCell.value?.data ?? null))
+
+const selectedDateLabel = computed(() => {
+  if (!selectedCell.value) return ''
+  return `${currentMonthLabel.value}${selectedCell.value.day}日 ${selectedCell.value.weekday}`
+})
+
+const freshTimeLabel = computed(() => {
+  if (!dataLastUpdated.value) return '--:--'
+  const d = new Date(dataLastUpdated.value)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+})
+
+const isDataStale = computed(() => {
+  if (!dataLastUpdated.value) return false
+  return Date.now() - new Date(dataLastUpdated.value).getTime() > STALE_HOURS * 60 * 60 * 1000
+})
+
+function hasDayData(data: CalendarDay | null | undefined): boolean {
+  if (!data) return false
+  return data.actualOccupancy != null || data.adr != null || data.revpar != null || data.actualRevenue != null
+}
+
+function completionPercent(data: CalendarDay | null | undefined): number {
+  if (!data || !data.forecastRevenue || !data.actualRevenue) return 0
+  return Math.min(100, Math.round((data.actualRevenue / data.forecastRevenue) * 100))
+}
+
+function dayStatus(data: CalendarDay | null | undefined): 'green' | 'yellow' | 'red' | 'gray' {
+  if (!hasDayData(data)) return 'gray'
+  const pct = completionPercent(data)
+  if (pct >= 90) return 'green'
+  if (pct >= 60) return 'yellow'
+  return 'red'
+}
+
+function statusLabel(data: CalendarDay | null | undefined): string {
+  const s = dayStatus(data)
+  if (s === 'green') return '达标'
+  if (s === 'yellow') return '预警'
+  if (s === 'red') return '未达标'
+  return '暂无数据'
+}
+
+function changeClass(change: number): string {
+  if (change > 0) return 'change-positive'
+  if (change < 0) return 'change-negative'
+  return 'change-neutral'
+}
 
 function prevMonth() {
   if (currentMonth.value === 1) {
@@ -253,14 +379,44 @@ function nextMonth() {
 }
 
 function toggleDayDetail(cell: CalendarCell) {
-  if (!cell.day) return
-  if (expandedDay.value === cell.day) {
-    expandedDay.value = null
+  if (cell.type !== 'current') return
+  if (selectedDay.value === cell.day) {
+    selectedDay.value = null
     dayDetail.value = null
     return
   }
-  expandedDay.value = cell.day
-  fetchDayDetail(cell.day)
+  selectedDay.value = cell.day
+  if (hasDayData(cell.data)) {
+    fetchDayDetail(cell.day)
+  } else {
+    dayDetail.value = null
+  }
+}
+
+function flashTodayCard() {
+  nextTick(() => {
+    const el = document.querySelector('.day-card--today')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      flashToday.value = true
+      setTimeout(() => {
+        flashToday.value = false
+      }, 600)
+    }
+  })
+}
+
+function goToday() {
+  const today = new Date()
+  const targetYear = today.getFullYear()
+  const targetMonth = today.getMonth() + 1
+  if (currentYear.value !== targetYear || currentMonth.value !== targetMonth) {
+    pendingTodayFlash.value = true
+    currentYear.value = targetYear
+    currentMonth.value = targetMonth
+  } else {
+    flashTodayCard()
+  }
 }
 
 async function fetchDayDetail(day: number) {
@@ -274,7 +430,7 @@ async function fetchDayDetail(day: number) {
       competitors: d.competitors || [],
       suggestedPrice: d.suggestedPrice ?? null,
       confidence: d.confidence ?? null,
-      executions: (d.executions || []).map((e: any) => ({
+      executions: (d.executions || []).map((e: { time: string; action: string; status: string }) => ({
         time: e.time,
         action: e.action,
         status: e.status,
@@ -288,55 +444,13 @@ async function fetchDayDetail(day: number) {
   }
 }
 
-function completionPercent(cell: CalendarCell) {
-  if (!cell.forecastRevenue || !cell.actualRevenue) return 0
-  return Math.min(100, Math.round((cell.actualRevenue / cell.forecastRevenue) * 100))
-}
-
-function completionClass(cell: CalendarCell) {
-  const pct = completionPercent(cell)
-  if (pct >= 90) return 'progress-bar__fill--safe'
-  if (pct >= 60) return 'progress-bar__fill--warning'
-  return 'progress-bar__fill--danger'
-}
-
-function changeClass(change: number) {
-  if (change > 0) return 'change-positive'
-  if (change < 0) return 'change-negative'
-  return 'change-neutral'
-}
-
-function dayCardClass(cell: CalendarCell) {
-  const pct = completionPercent(cell)
-  if (pct >= 90) return 'day-card--success'
-  if (pct >= 60) return 'day-card--warning'
-  if (cell.actualRevenue != null) return 'day-card--danger'
-  return ''
-}
-
-function statusIcon(cell: CalendarCell) {
-  const pct = completionPercent(cell)
-  if (pct >= 90) return '✅'
-  if (pct >= 60) return '⚠️'
-  if (cell.actualRevenue != null) return '❌'
-  return '⏳'
-}
-
-function statusLabel(cell: CalendarCell) {
-  const pct = completionPercent(cell)
-  if (pct >= 90) return '达标'
-  if (pct >= 60) return '预警'
-  if (cell.actualRevenue != null) return '未达标'
-  return '待更新'
-}
-
 async function fetchCalendarData() {
   loading.value = true
   try {
     const monthStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}`
     const { data } = await http.get('/v1/calendar/monthly', { params: { month: monthStr } })
     calendarData.value = data.data || data
-    dataLastUpdated.value = new Date().toLocaleString()
+    dataLastUpdated.value = new Date().toISOString()
   } catch {
     calendarData.value = []
     toastMessage.value = '日历数据加载失败，请检查网络后重试'
@@ -346,7 +460,18 @@ async function fetchCalendarData() {
   }
 }
 
-watch([currentYear, currentMonth], fetchCalendarData)
+watch([currentYear, currentMonth], () => {
+  selectedDay.value = null
+  dayDetail.value = null
+  fetchCalendarData()
+})
+
+watch(loading, (val) => {
+  if (!val && pendingTodayFlash.value) {
+    pendingTodayFlash.value = false
+    flashTodayCard()
+  }
+})
 
 onMounted(fetchCalendarData)
 </script>
@@ -356,34 +481,31 @@ onMounted(fetchCalendarData)
   min-height: 100%;
 }
 
-.calendar-header {
+/* ===== Toolbar ===== */
+.calendar-toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
 }
 
-.calendar-header h1 {
-  font-size: var(--font-size-xxl);
-  font-weight: 700;
-}
-
-.calendar-header__subtitle {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-top: var(--spacing-xs);
-}
-
-.calendar-header__right {
+.calendar-toolbar__nav {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
-.calendar-header__month {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  min-width: 120px;
+.calendar-toolbar__title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  min-width: 110px;
   text-align: center;
 }
 
@@ -392,6 +514,122 @@ onMounted(fetchCalendarData)
   font-size: var(--font-size-sm);
 }
 
+.calendar-today-btn {
+  padding: 6px 16px;
+  font-size: var(--font-size-sm);
+}
+
+.calendar-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.freshness {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.freshness__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: pulse-dot 2s infinite;
+}
+
+.freshness--stale {
+  color: var(--color-warning);
+}
+
+.freshness--stale .freshness__dot {
+  background: var(--color-warning);
+}
+
+.freshness__warning {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.calendar-legend {
+  display: flex;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.legend-swatch--green {
+  background: var(--color-success);
+}
+
+.legend-swatch--yellow {
+  background: var(--color-warning);
+}
+
+.legend-swatch--red {
+  background: var(--color-error);
+}
+
+.legend-swatch--gray {
+  background: var(--color-border);
+}
+
+/* ===== Skeleton ===== */
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.skeleton-card {
+  min-height: 160px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(110deg, #eceff4 30%, #f8fafc 50%, #eceff4 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ===== Calendar Grid ===== */
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -408,95 +646,168 @@ onMounted(fetchCalendarData)
 }
 
 .calendar-cell {
-  min-height: 180px;
+  min-height: 160px;
 }
 
-.calendar-cell--empty {
-  background: transparent;
-}
-
-.day-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+.calendar-cell--other {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
   padding: var(--spacing-sm);
-  height: 100%;
+}
+
+.day-other {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  opacity: 0.5;
+}
+
+/* ===== Day Card ===== */
+.day-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  transition: box-shadow 0.2s;
-  font-size: var(--font-size-xs);
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  color: inherit;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
 
 .day-card:hover {
+  transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
-.day-card--success {
-  border-left: 3px solid var(--color-success);
+.day-card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
-.day-card--warning {
-  border-left: 3px solid var(--color-warning);
+.day-card--weekend {
+  background: var(--color-bg);
 }
 
-.day-card--danger {
-  border-left: 3px solid var(--color-error);
+.day-card--today {
+  border-color: var(--color-primary);
+  border-width: 2px;
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.day-card--selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-bg), var(--shadow-md);
+}
+
+.day-card--flash {
+  animation: today-flash 0.6s ease;
+}
+
+@keyframes today-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px var(--color-primary-bg);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(22, 119, 255, 0.25), 0 0 24px rgba(22, 119, 255, 0.4);
+  }
+}
+
+.day-card__status-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.day-card--green .day-card__status-bar {
+  background: var(--color-success);
+}
+
+.day-card--yellow .day-card__status-bar {
+  background: var(--color-warning);
+}
+
+.day-card--red .day-card__status-bar {
+  background: var(--color-error);
+}
+
+.day-card--gray .day-card__status-bar {
+  background: var(--color-border);
 }
 
 .day-card__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
 }
 
 .day-card__date {
+  font-size: var(--font-size-lg);
   font-weight: 700;
-  font-size: var(--font-size-sm);
 }
 
 .day-card__weekday {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.day-card__today-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.day-card__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
-}
-
-.day-card__status {
-  font-size: 14px;
-}
-
-.day-card__meta {
-  color: var(--color-text-tertiary);
 }
 
 .day-card__metrics {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  flex: 1;
 }
 
 .metric-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .metric-label {
   color: var(--color-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .metric-value {
   font-weight: 600;
-}
-
-.metric-value--predict {
-  color: var(--color-primary);
-}
-
-.accuracy {
-  font-size: 10px;
-  color: var(--color-success);
-  font-weight: 400;
+  font-size: var(--font-size-xs);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
 }
 
 .change-positive {
@@ -514,147 +825,280 @@ onMounted(fetchCalendarData)
   font-size: 10px;
 }
 
-.day-card__revenue {
+.progress-bar {
+  display: block;
+  height: 4px;
+  background: #eef1f6;
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.progress-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.progress-bar__fill--green {
+  background: var(--color-success);
+}
+
+.progress-bar__fill--yellow {
+  background: var(--color-warning);
+}
+
+.progress-bar__fill--red {
+  background: var(--color-error);
+}
+
+.progress-bar__fill--gray {
+  background: var(--color-border);
+}
+
+.day-card__footer {
   margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 4px;
 }
 
-.revenue-row {
-  display: flex;
-  justify-content: space-between;
+/* ===== Detail Panel ===== */
+.detail-panel {
+  margin-top: var(--spacing-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-md) var(--spacing-lg);
 }
 
-.revenue-label {
-  color: var(--color-text-secondary);
+.panel-enter-active,
+.panel-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.revenue-value {
-  font-weight: 600;
+.panel-enter-from,
+.panel-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
-.revenue-value--fct {
-  color: var(--color-primary);
-}
-
-.loading-state {
-  text-align: center;
-  color: var(--color-text-tertiary);
-  padding: var(--spacing-xl);
-}
-
-.day-card--expanded {
-  grid-column: span 2;
-  grid-row: span 2;
-  z-index: 10;
-  position: relative;
-  cursor: default;
-}
-
-.day-detail {
-  margin-top: var(--spacing-sm);
-  padding-top: var(--spacing-sm);
-  border-top: 1px dashed var(--color-border);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.day-detail__section h4 {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: 4px;
-}
-
-.day-detail__loading {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-}
-
-.day-detail__empty {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-quaternary, #d9d9d9);
-}
-
-.competitor-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.competitor-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-size-xs);
-}
-
-.competitor-item__name {
-  color: var(--color-text-secondary);
-}
-
-.competitor-item__price {
-  font-weight: 600;
-}
-
-.suggested-price {
+.detail-panel__header {
   display: flex;
   align-items: baseline;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--spacing-md);
+}
+
+.detail-panel__date {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.detail-panel__summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.detail-panel__no-data {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.detail-panel__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+.detail-panel__col-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--color-primary-bg);
+  margin-bottom: var(--spacing-sm);
+}
+
+.detail-panel__loading {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  padding: var(--spacing-md) 0;
+}
+
+.detail-panel__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.detail-panel__full-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-base);
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.detail-panel__list {
+  list-style: none;
+}
+
+.competitor-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-bg);
+  font-size: var(--font-size-sm);
+}
+
+.competitor-row:last-child {
+  border-bottom: none;
+}
+
+.competitor-row__name {
+  color: var(--color-text-secondary);
+}
+
+.competitor-row__price {
+  font-weight: 600;
+}
+
+.ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}
+
+.ai-card__price {
+  font-size: var(--font-size-xxl);
+  font-weight: 700;
+  color: var(--color-primary-active);
+}
+
+.ai-card__confidence {
+  display: flex;
+  align-items: center;
   gap: var(--spacing-sm);
 }
 
-.suggested-price__value {
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-  color: var(--color-primary);
+.ai-card__confidence-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
-.suggested-price__confidence {
-  font-size: 10px;
-  color: var(--color-success);
+.ai-card__confidence-bar {
+  flex: 1;
+  height: 6px;
+  background: #d6e4ff;
+  border-radius: 3px;
+  overflow: hidden;
 }
 
-.execution-list {
+.ai-card__confidence-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+
+.ai-card__confidence-value {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary-active);
+}
+
+.execution-timeline {
+  list-style: none;
+  position: relative;
+  padding-left: var(--spacing-md);
+}
+
+.execution-timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--color-border);
+  border-radius: 1px;
+}
+
+.execution-timeline__item {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.execution-item {
-  display: flex;
-  gap: var(--spacing-xs);
-  font-size: 10px;
   align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px 0;
+  font-size: var(--font-size-xs);
 }
 
-.execution-item__time {
+.execution-timeline__dot {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--color-bg-card);
+}
+
+.execution-timeline__dot--ok {
+  background: var(--color-success);
+}
+
+.execution-timeline__dot--fail {
+  background: var(--color-error);
+}
+
+.execution-timeline__time {
   color: var(--color-text-tertiary);
   min-width: 40px;
 }
 
-.execution-item__action {
+.execution-timeline__action {
   flex: 1;
 }
 
-.execution-item__result {
+.execution-timeline__result {
   font-weight: 500;
 }
 
-.execution-item__result--success {
+.execution-timeline__result--success {
   color: var(--color-success);
 }
 
-.execution-item__result--failed {
+.execution-timeline__result--failed {
   color: var(--color-error);
 }
 
-.execution-item__result--pending {
+.execution-timeline__result--pending {
   color: var(--color-warning);
 }
 
+/* ===== Empty State ===== */
 .empty-state {
   text-align: center;
   padding: var(--spacing-xxl);
@@ -666,26 +1110,68 @@ onMounted(fetchCalendarData)
   margin-top: var(--spacing-xs);
 }
 
-@media (max-width: 1024px) {
-  .calendar-grid {
-    gap: 4px;
+/* ===== Responsive ===== */
+@media (max-width: 1200px) {
+  .calendar-grid,
+  .skeleton-grid {
+    gap: 6px;
   }
 
-  .day-card {
-    padding: 4px;
-    font-size: 10px;
-  }
-
-  .calendar-cell {
+  .calendar-cell,
+  .day-card,
+  .skeleton-card {
     min-height: 140px;
   }
 }
 
-@media (max-width: 768px) {
-  .calendar-header {
-    flex-direction: column;
+@media (max-width: 900px) {
+  .detail-panel__columns {
+    grid-template-columns: 1fr;
     gap: var(--spacing-md);
+  }
+
+  .calendar-cell,
+  .day-card,
+  .skeleton-card {
+    min-height: 120px;
+  }
+
+  .day-card__footer {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .calendar-toolbar {
+    flex-direction: column;
     align-items: flex-start;
+  }
+
+  .calendar-legend {
+    display: none;
+  }
+
+  .calendar-cell,
+  .day-card,
+  .skeleton-card {
+    min-height: 90px;
+  }
+
+  .day-card__weekday {
+    display: none;
+  }
+
+  .progress-bar {
+    display: none;
+  }
+
+  .detail-panel {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .detail-panel__header {
+    flex-direction: column;
+    gap: 4px;
   }
 }
 </style>
