@@ -49,7 +49,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { predictionApi } from '../../services/api'
-import { formatCurrency } from '../../utils/format'
 import AppToast from '../../components/common/AppToast.vue'
 import type { Prediction } from '../../types'
 

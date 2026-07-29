@@ -69,7 +69,7 @@
       <p>暂无审批记录</p>
       <p class="empty-hint">当有审批记录时将在此显示</p>
     </div>
-    <AppToast v-if="toastMessage" :message="toastMessage" :type="toastType" @close="toastMessage = ''" />
+    <AppToast :show="!!toastMessage" :message="toastMessage" :type="toastType" @update:show="toastMessage = ''" />
   </div>
 </template>
 

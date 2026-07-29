@@ -16,13 +16,15 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   show: boolean
   message: string
   type?: 'error' | 'success' | 'warning'
   retryable?: boolean
   duration?: number
-}>()
+}>(), {
+  type: 'success',
+})
 
 const emit = defineEmits<{
   (e: 'update:show', val: boolean): void

@@ -117,13 +117,6 @@ function roomStatusLabel(s: string) {
   return '维护中'
 }
 
-function requestConfirm(title: string, message: string, action: () => void) {
-  confirmTitle.value = title
-  confirmMessage.value = message
-  confirmAction = action
-  confirmShow.value = true
-}
-
 function handleConfirm() {
   confirmShow.value = false
   if (confirmAction) {

@@ -51,7 +51,7 @@
     </div>
     <p v-else class="empty-state">加载中...</p>
     <ConfirmDialog :show="showConfirm" :title="confirmTitle" :message="confirmMessage" @update:show="showConfirm = $event" @confirm="handleConfirm" />
-    <AppToast v-if="toastMessage" :message="toastMessage" :type="toastType" @close="toastMessage = ''" />
+    <AppToast :show="!!toastMessage" :message="toastMessage" :type="toastType" @update:show="toastMessage = ''" />
   </div>
 </template>
 

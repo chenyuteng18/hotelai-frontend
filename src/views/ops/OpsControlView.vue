@@ -185,7 +185,7 @@ const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref<'error' | 'success' | 'warning'>('error')
 const toastRetryable = ref(false)
-let toastRetryAction: (() => void) | null = null
+let toastRetryAction: (() => void) | undefined
 
 const confirmShow = ref(false)
 const confirmTitle = ref('')
@@ -203,7 +203,7 @@ function switchCardClass(enabled: boolean) {
   return enabled ? 'switch-card--active' : ''
 }
 
-function showToast(message: string, type: 'error' | 'success' | 'warning' = 'error', retryable = false, retryFn: (() => void) | null = null) {
+function showToast(message: string, type: 'error' | 'success' | 'warning' = 'error', retryable = false, retryFn: (() => void) | undefined = undefined) {
   toastMessage.value = message
   toastType.value = type
   toastRetryable.value = retryable
