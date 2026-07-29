@@ -61,7 +61,7 @@
               <span class="day-card__metrics">
                 <span class="metric-row">
                   <span class="metric-label">入住率</span>
-                  <span class="metric-value">{{ cell.data!.actualOccupancy ?? '--' }}%</span>
+                  <span class="metric-value">{{ cell.data!.occupancy ?? '--' }}%</span>
                 </span>
                 <span class="metric-row">
                   <span class="metric-label">ADR</span>
@@ -79,17 +79,17 @@
                 <span
                   class="progress-bar"
                   role="img"
-                  :aria-label="'收入完成度 ' + completionPercent(cell.data) + '%'"
+                  :aria-label="'入住率 ' + occupancyPercent(cell.data) + '%'"
                 >
                   <span
                     class="progress-bar__fill"
                     :class="'progress-bar__fill--' + dayStatus(cell.data)"
-                    :style="{ width: completionPercent(cell.data) + '%' }"
+                    :style="{ width: occupancyPercent(cell.data) + '%' }"
                   ></span>
                 </span>
                 <span class="metric-row day-card__footer">
-                  <span class="metric-label">收入 {{ formatCurrency(cell.data!.actualRevenue) }}</span>
-                  <span class="metric-label">OTB {{ cell.data!.otbTime || '--:--' }}</span>
+                  <span class="metric-label">收入 {{ formatCurrency(cell.data!.revenue) }}</span>
+                  <span class="metric-label">置信度 {{ confidenceLabel(cell.data!.confidence) }}</span>
                 </span>
               </span>
             </template>
@@ -108,8 +108,8 @@
         <header class="detail-panel__header">
           <h3 class="detail-panel__date">{{ selectedDateLabel }}</h3>
           <span v-if="selectedHasData && selectedCell?.data" class="detail-panel__summary">
-            入住率 {{ selectedCell.data.actualOccupancy ?? '--' }}% · ADR {{ formatCurrency(selectedCell.data.adr) }} ·
-            RevPAR {{ formatCurrency(selectedCell.data.revpar) }} · 收入 {{ formatCurrency(selectedCell.data.actualRevenue) }}
+            入住率 {{ selectedCell.data.occupancy ?? '--' }}% · ADR {{ formatCurrency(selectedCell.data.adr) }} ·
+            RevPAR {{ formatCurrency(selectedCell.data.revpar) }} · 收入 {{ formatCurrency(selectedCell.data.revenue) }}
           </span>
           <span v-else class="detail-panel__no-data">该日无定价记录</span>
         </header>
@@ -118,8 +118,7 @@
           <template v-if="selectedHasData">
             <div class="detail-panel__col">
               <h4 class="detail-panel__col-title">竞对价格</h4>
-              <div v-if="dayDetailLoading" class="detail-panel__loading">加载中...</div>
-              <ul v-else-if="dayDetail?.competitors?.length" class="detail-panel__list">
+              <ul v-if="dayDetail?.competitors?.length" class="detail-panel__list">
                 <li v-for="comp in dayDetail.competitors" :key="comp.name" class="competitor-row">
                   <span class="competitor-row__name">{{ comp.name }}</span>
                   <span class="competitor-row__price">{{ formatCurrency(comp.price) }}</span>
@@ -130,24 +129,25 @@
 
             <div class="detail-panel__col">
               <h4 class="detail-panel__col-title">AI 建议价</h4>
-              <div v-if="dayDetailLoading" class="detail-panel__loading">加载中...</div>
-              <div v-else-if="dayDetail?.suggestedPrice != null" class="ai-card">
-                <span class="ai-card__price">{{ formatCurrency(dayDetail.suggestedPrice) }}</span>
-                <span v-if="dayDetail.confidence != null" class="ai-card__confidence">
-                  <span class="ai-card__confidence-label">置信度</span>
-                  <span class="ai-card__confidence-bar">
-                    <span class="ai-card__confidence-fill" :style="{ width: dayDetail.confidence + '%' }"></span>
+              <div v-if="dayDetail?.suggestions?.length" class="ai-suggestions">
+                <div v-for="sug in dayDetail.suggestions" :key="sug.roomType" class="ai-card">
+                  <span class="ai-card__room">{{ sug.roomType }}</span>
+                  <span class="ai-card__price">{{ formatCurrency(sug.price) }}</span>
+                  <span v-if="sug.confidence != null" class="ai-card__confidence">
+                    <span class="ai-card__confidence-label">置信度</span>
+                    <span class="ai-card__confidence-bar">
+                      <span class="ai-card__confidence-fill" :style="{ width: sug.confidence + '%' }"></span>
+                    </span>
+                    <span class="ai-card__confidence-value">{{ sug.confidence }}%</span>
                   </span>
-                  <span class="ai-card__confidence-value">{{ dayDetail.confidence }}%</span>
-                </span>
+                </div>
               </div>
               <div v-else class="detail-panel__empty">暂无数据</div>
             </div>
 
             <div class="detail-panel__col">
               <h4 class="detail-panel__col-title">执行记录</h4>
-              <div v-if="dayDetailLoading" class="detail-panel__loading">加载中...</div>
-              <ol v-else-if="dayDetail?.executions?.length" class="execution-timeline">
+              <ol v-if="dayDetail?.executions?.length" class="execution-timeline">
                 <li v-for="(exec, idx) in dayDetail.executions" :key="idx" class="execution-timeline__item">
                   <span
                     class="execution-timeline__dot"
@@ -196,23 +196,57 @@ interface CalendarDay {
   date: string
   day: number
   weekday: string
-  otbTime: string | null
-  actualOccupancy: number | null
-  predictedOccupancy: number | null
-  accuracy: number | null
+  occupancy: number | null
   adr: number | null
   adrChange: number | null
   revpar: number | null
-  revparChange: number | null
-  actualRevenue: number | null
-  forecastRevenue: number | null
+  revenue: number | null
+  confidence: string | null
 }
 
 interface DayDetail {
   competitors: { name: string; price: number }[]
-  suggestedPrice: number | null
-  confidence: number | null
+  suggestions: { roomType: string; price: number; confidence: number | null }[]
   executions: { time: string; action: string; status: string; statusLabel: string }[]
+}
+
+interface ForecastRow {
+  target_date: string
+  predicted_occ: number | null
+  predicted_adr: number | null
+  predicted_revpar: number | null
+  confidence: string | null
+}
+
+interface TrendRow {
+  date: string
+  my_price: number | null
+  comp_avg: number | null
+}
+
+interface SuggestionItem {
+  room_type_name: string
+  target_date: string
+  target_price: number | null
+  confidence: string | number | null
+}
+
+interface ApprovalItem {
+  room_type_name: string
+  target_date: string
+  target_price: string | number | null
+  status: string
+  approved_at: string | null
+}
+
+interface SummaryData {
+  today_suggestions: SuggestionItem[]
+  recent_approvals: ApprovalItem[]
+  competitor_comparison: {
+    my_avg_price: number
+    competitor_avg_price: number
+    trend_7d: TrendRow[]
+  }
 }
 
 type CellType = 'prev' | 'current' | 'next'
@@ -226,22 +260,32 @@ interface CalendarCell {
   data?: CalendarDay | null
 }
 
-const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://118.190.207.62:8080/api',
+const calHttp = axios.create({
+  baseURL: import.meta.env.VITE_CALENDAR_API_BASE_URL || 'http://118.190.207.62:3002/api/v1',
   timeout: 15000,
 })
 
+calHttp.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 const STALE_HOURS = 4
+const ROOM_COUNT = 49
+const OCC_GREEN = 75
+const OCC_YELLOW = 55
 
 const now = new Date()
 const currentYear = ref(now.getFullYear())
 const currentMonth = ref(now.getMonth() + 1)
 const calendarData = ref<CalendarDay[]>([])
+const summary = ref<SummaryData | null>(null)
 const loading = ref(false)
 const dataLastUpdated = ref('')
 const selectedDay = ref<number | null>(null)
-const dayDetail = ref<DayDetail | null>(null)
-const dayDetailLoading = ref(false)
 const flashToday = ref(false)
 const pendingTodayFlash = ref(false)
 const toastVisible = ref(false)
@@ -259,6 +303,29 @@ function isWeekendDate(date: Date): boolean {
 
 function isSameDate(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+function toLocalDateStr(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function toPercent(occ: number | null | undefined): number | null {
+  if (occ == null) return null
+  return occ <= 1 ? Math.round(occ * 100) : Math.round(occ)
+}
+
+function confidenceNum(c: string | number | null | undefined): number | null {
+  if (c == null) return null
+  if (typeof c === 'number') return c <= 1 ? Math.round(c * 100) : Math.round(c)
+  const map: Record<string, number> = { high: 90, medium: 70, low: 50 }
+  return map[String(c).toLowerCase()] ?? null
+}
+
+function confidenceLabel(c: string | null | undefined): string {
+  if (!c) return '--'
+  const map: Record<string, string> = { high: '高', medium: '中', low: '低' }
+  return map[String(c).toLowerCase()] ?? String(c)
 }
 
 const calendarCells = computed<CalendarCell[]>(() => {
@@ -330,19 +397,19 @@ const isDataStale = computed(() => {
 
 function hasDayData(data: CalendarDay | null | undefined): boolean {
   if (!data) return false
-  return data.actualOccupancy != null || data.adr != null || data.revpar != null || data.actualRevenue != null
+  return data.occupancy != null || data.adr != null || data.revpar != null
 }
 
-function completionPercent(data: CalendarDay | null | undefined): number {
-  if (!data || !data.forecastRevenue || !data.actualRevenue) return 0
-  return Math.min(100, Math.round((data.actualRevenue / data.forecastRevenue) * 100))
+function occupancyPercent(data: CalendarDay | null | undefined): number {
+  if (!data || data.occupancy == null) return 0
+  return Math.min(100, Math.max(0, data.occupancy))
 }
 
 function dayStatus(data: CalendarDay | null | undefined): 'green' | 'yellow' | 'red' | 'gray' {
   if (!hasDayData(data)) return 'gray'
-  const pct = completionPercent(data)
-  if (pct >= 90) return 'green'
-  if (pct >= 60) return 'yellow'
+  const occ = data!.occupancy ?? 0
+  if (occ >= OCC_GREEN) return 'green'
+  if (occ >= OCC_YELLOW) return 'yellow'
   return 'red'
 }
 
@@ -382,15 +449,9 @@ function toggleDayDetail(cell: CalendarCell) {
   if (cell.type !== 'current') return
   if (selectedDay.value === cell.day) {
     selectedDay.value = null
-    dayDetail.value = null
     return
   }
   selectedDay.value = cell.day
-  if (hasDayData(cell.data)) {
-    fetchDayDetail(cell.day)
-  } else {
-    dayDetail.value = null
-  }
 }
 
 function flashTodayCard() {
@@ -419,38 +480,96 @@ function goToday() {
   }
 }
 
-async function fetchDayDetail(day: number) {
-  dayDetailLoading.value = true
-  dayDetail.value = null
-  const dateStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+function dateStrForDay(day: number): string {
+  return `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+const dayDetail = computed<DayDetail | null>(() => {
+  if (selectedDay.value == null || !selectedCell.value) return null
+  const dateStr = dateStrForDay(selectedDay.value)
+  const detail: DayDetail = { competitors: [], suggestions: [], executions: [] }
+  const s = summary.value
+  if (!s) return detail
+
+  const trend = (s.competitor_comparison?.trend_7d || []).find((t) => toLocalDateStr(t.date) === dateStr)
+  if (trend) {
+    if (trend.comp_avg != null) detail.competitors.push({ name: '竞对均价', price: trend.comp_avg })
+    if (trend.my_price != null) detail.competitors.push({ name: '本店价', price: trend.my_price })
+  }
+
+  detail.suggestions = (s.today_suggestions || [])
+    .filter((it) => toLocalDateStr(it.target_date) === dateStr)
+    .map((it) => ({
+      roomType: it.room_type_name,
+      price: it.target_price != null ? Number(it.target_price) : 0,
+      confidence: confidenceNum(it.confidence),
+    }))
+
+  detail.executions = (s.recent_approvals || [])
+    .filter((a) => toLocalDateStr(a.target_date) === dateStr)
+    .map((a) => {
+      const t = a.approved_at ? new Date(a.approved_at) : null
+      return {
+        time: t ? `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '--:--',
+        action: `${a.room_type_name} 调价至 ${formatCurrency(Number(a.target_price))}`,
+        status: a.status === 'approved' ? 'success' : 'failed',
+        statusLabel: a.status === 'approved' ? '已批准' : a.status === 'rejected' ? '已驳回' : '待审批',
+      }
+    })
+
+  return detail
+})
+
+async function fetchSummary() {
   try {
-    const { data } = await http.get(`/v1/calendar/day-detail`, { params: { date: dateStr } })
-    const d = data.data || data
-    dayDetail.value = {
-      competitors: d.competitors || [],
-      suggestedPrice: d.suggestedPrice ?? null,
-      confidence: d.confidence ?? null,
-      executions: (d.executions || []).map((e: { time: string; action: string; status: string }) => ({
-        time: e.time,
-        action: e.action,
-        status: e.status,
-        statusLabel: e.status === 'success' ? '成功' : e.status === 'failed' ? '失败' : '待执行',
-      })),
-    }
+    const { data } = await calHttp.get('/dashboard/summary')
+    summary.value = data.data || data
   } catch {
-    dayDetail.value = { competitors: [], suggestedPrice: null, confidence: null, executions: [] }
-  } finally {
-    dayDetailLoading.value = false
+    summary.value = null
   }
 }
 
 async function fetchCalendarData() {
   loading.value = true
   try {
-    const monthStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}`
-    const { data } = await http.get('/v1/calendar/monthly', { params: { month: monthStr } })
-    calendarData.value = data.data || data
-    dataLastUpdated.value = new Date().toISOString()
+    const { data } = await calHttp.get('/forecasts')
+    const payload = data.data || data
+    const rows: ForecastRow[] = payload.forecasts || []
+
+    const sorted = [...rows].sort(
+      (a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
+    )
+
+    calendarData.value = sorted.map((r, idx) => {
+      const local = toLocalDateStr(r.target_date)
+      const d = new Date(local + 'T00:00:00')
+      const adr = r.predicted_adr != null ? Number(r.predicted_adr) : null
+      const revpar = r.predicted_revpar != null ? Number(r.predicted_revpar) : null
+
+      let adrChange: number | null = null
+      if (idx > 0 && adr != null) {
+        const prev = sorted[idx - 1].predicted_adr != null ? Number(sorted[idx - 1].predicted_adr) : null
+        if (prev != null && prev !== 0) {
+          adrChange = Math.round(((adr - prev) / prev) * 1000) / 10
+        }
+      }
+
+      return {
+        date: local,
+        day: d.getDate(),
+        weekday: weekdayNames[d.getDay()],
+        occupancy: toPercent(r.predicted_occ),
+        adr,
+        adrChange,
+        revpar,
+        revenue: revpar != null ? Math.round(revpar * ROOM_COUNT) : null,
+        confidence: r.confidence != null ? String(r.confidence) : null,
+      }
+    })
+
+    dataLastUpdated.value = payload.generated_at
+      ? new Date(payload.generated_at).toISOString()
+      : new Date().toISOString()
   } catch {
     calendarData.value = []
     toastMessage.value = '日历数据加载失败，请检查网络后重试'
@@ -462,8 +581,6 @@ async function fetchCalendarData() {
 
 watch([currentYear, currentMonth], () => {
   selectedDay.value = null
-  dayDetail.value = null
-  fetchCalendarData()
 })
 
 watch(loading, (val) => {
@@ -473,7 +590,10 @@ watch(loading, (val) => {
   }
 })
 
-onMounted(fetchCalendarData)
+onMounted(() => {
+  fetchCalendarData()
+  fetchSummary()
+})
 </script>
 
 <style scoped>
@@ -924,12 +1044,6 @@ onMounted(fetchCalendarData)
   margin-bottom: var(--spacing-sm);
 }
 
-.detail-panel__loading {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  padding: var(--spacing-md) 0;
-}
-
 .detail-panel__empty {
   display: flex;
   align-items: center;
@@ -977,6 +1091,18 @@ onMounted(fetchCalendarData)
 }
 
 .competitor-row__price {
+  font-weight: 600;
+}
+
+.ai-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.ai-card__room {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   font-weight: 600;
 }
 
